@@ -8,7 +8,7 @@ services:
       - "80:80"
       - "443:443"
     volumes:
-      - "/home/registry/acme.json:/etc/traefik/acme/acme.json"
+      - "/etc/traefik/acme/acme.json:/etc/traefik/acme/acme.json"
       - "./traefik.toml:/etc/traefik/traefik.toml"
       - "/var/run/docker.sock:/var/run/docker.sock"
     labels:

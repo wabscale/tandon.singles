@@ -14,16 +14,7 @@
     <div class="col-md-6 offset-md-3">
       <div class="jumbotron">
         <h1>Register</h1>
-        {%- with messages = get_flashed_messages() %}
-          {%- if messages %}
-            <div class="alert alert-danger" role="alert">
-              {% for message in messages %}
-                {{ message }}
-              {% endfor %}
-            </div>
-          {%- endif %}
-        {%- endwith %}
-        {{ render_form(form) }} 
+        {{ render_form(form) }}
       </div>
     </div>
   </div>

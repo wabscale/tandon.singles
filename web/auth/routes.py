@@ -15,7 +15,13 @@ def register():
     if current_user.is_authenticated:
         return redirect(url_for('index'))
     form = RegistrationForm()
-    if form.validate_on_submit() and app.config['REGISTATION_OPEN']:
+
+    if not app.config['REGISTATION_OPEN']:
+        for field in form:
+            field.disabled=True
+        return render_template('auth/register.html', form=form)
+
+    if form.validate_on_submit():
         try:
             u = User(username=form.username.data)
             u.set_password(form.password.data)

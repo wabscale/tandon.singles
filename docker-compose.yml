@@ -27,7 +27,7 @@ services:
     expose:
       - "80"
     volumes:
-      - "./web/.data:/flasq/web/.data"
+      - "/root/.data:/flasq/web/.data"
     labels:
       - "traefik.enabled=true"
       - "traefik.port=80"

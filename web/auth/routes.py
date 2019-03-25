@@ -1,11 +1,10 @@
 from flask import request, redirect, url_for, flash, render_template, Blueprint
 from flask_login import current_user, login_user, logout_user, login_required
-from sqlalchemy.exc import IntegrityError
 
 from .forms import LoginForm, RegistrationForm
 
 from ..app import db, app
-from ..models import User
+from . import create_user, User
 
 auth = Blueprint('auth', __name__, url_prefix='/auth')
 
@@ -23,10 +22,7 @@ def register():
 
     if form.validate_on_submit():
         try:
-            u = User(username=form.username.data)
-            u.set_password(form.password.data)
-            db.session.add(u)
-            db.session.commit()
+            u=create_user(form.username.data, form.password.data)
             login_user(u)
             return redirect(url_for('index'))
         except IntegrityError:
@@ -42,7 +38,7 @@ def login():
         return redirect(url_for('index'))
     form = LoginForm()
     if form.validate_on_submit():
-        u = (User.query.filter_by(username=form.username.data)).first()
+        u = User(username)
         if u is None or not u.check_password(form.password.data):
             flash('Invalid username or password')
             return render_template('auth/login.html', form=form)

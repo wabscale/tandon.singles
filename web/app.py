@@ -3,6 +3,7 @@ from flask_login import current_user, login_required
 from flask_sqlalchemy import SQLAlchemy
 from flask_bootstrap import Bootstrap
 from flask_wtf import CSRFProtect
+from flaskext.mysql import MySQL
 
 from .config import Config
 
@@ -14,8 +15,8 @@ app.config.from_object(Config)
 
 Bootstrap(app)
 CSRFProtect(app)
-db = SQLAlchemy(app)
-
+#db = SQLAlchemy(app)
+db=MySQL(app)
 
 # register blueprints
 from .auth import auth

@@ -8,14 +8,15 @@ services:
       - "80:80"
       - "443:443"
     volumes:
+      - "/home/registry/acme.json:/etc/traefik/acme/acme.json"
       - "./traefik.toml:/etc/traefik/traefik.toml"
       - "/var/run/docker.sock:/var/run/docker.sock"
     labels:
       - "traefik.port=8080"
       - "traefik.enabled=true"
       - "traefik.backend=traefik"
-      # - "traefik.frontend.auth.basic.users={user:hash}"
-      # - "traefik.frontend.rule=Host:traefik.{domain}"
+      - "traefik.frontend.auth.basic.users=admin:$$2y$$05$$1/4YQ.nZ3eFWSMrOS4UOVOUMKVIbxHS8t4i7a5CgjqZ/3ytGnVlea"
+      - "traefik.frontend.rule=Host:traefik.tandon.singles"
     networks:
       - traefik-proxy
 
@@ -29,15 +30,22 @@ services:
       - "./web/.data:/flasq/web/.data"
     labels:
       - "traefik.enabled=true"
-      - "traefik.backend=traefik"
       - "traefik.port=80"
-      - "traefik.frontend.rule=Host:{domain}"
+      - "traefik.backend=flasq"
+      - "traefik.frontend.rule=Host:tandon.singles"
     environment:
       - "PORT=80"
       - "WORKERS=4"
-      - "SITENAME={websitename}"
+      - "SITENAME=tandon.singles"
     networks:
       - traefik-proxy
+
+  db:
+    image: mariadb:10.4
+    expose:
+      - "3306"
+    environment:
+      - "MYSQL_ROOT_PASSWORD=password"
 
 networks:
   traefik-proxy:

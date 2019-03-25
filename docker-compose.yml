@@ -40,14 +40,15 @@ services:
     networks:
       - traefik-proxy
 
-  db:
-    image: mariadb:10.4
-    expose:
-      - "3306"
-    environment:
-      - "MYSQL_ROOT_PASSWORD=password"
-    labels:
-      - "traefik.enabled=false"
+
+  # db:
+  #   image: mariadb:10.4
+  #   expose:
+  #     - "3306"
+  #   environment:
+  #     - "MYSQL_ROOT_PASSWORD=password"
+  #   labels:
+  #     - "traefik.enabled=false"
 
 networks:
   traefik-proxy:

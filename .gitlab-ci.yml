@@ -1,13 +1,9 @@
 stages:
-  - build
-
-before_script:
-  - docker login
+  - deploy
   
 build_flasq:
-  stage: build
+  stage: deploy
   tags:
     - server-tag
   script:
-    - make buildbase
-    - docker push jmc1283/flasq-base
+    - make deploy

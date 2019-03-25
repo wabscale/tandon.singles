@@ -1,8 +1,17 @@
 {%- extends "base.html" %}
 {% block content %}
+  <div class="container">
+    <div class="col-sm-4 offset-sm-4">
+      <div class="alert alert-danger alrt-dismissable" role="alert">
+        Registration closed for now ;(
+        <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+          <span aria-hidden="true">×</span>
+        </button>
+      </div>
+    </div>
+  </div>
   <div class="row">
-    <div class="col-sm-4"></div>
-    <div class="col-sm-4">
+    <div class="col-md-6 offset-md-3">
       <div class="jumbotron">
         <h1>Register</h1>
         {%- with messages = get_flashed_messages() %}
@@ -14,16 +23,8 @@
             </div>
           {%- endif %}
         {%- endwith %}
-        <div class="alert alert-danger alert-dismissable" role="alert">
-          <button type="button" class="close" data-dismiss="alert" aria-label="Close">
-            <p>
-              Registration closed for now ;(
-            </p>
-            <span aria-hidden="true">×</span></button>
-        </div>
-        {# {{ render_form(form) }} #}
+        {{ render_form(form) }} 
       </div>
     </div>
-    <div class="col-sm-4"></div>
   </div>
 {%- endblock %}

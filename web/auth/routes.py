@@ -4,7 +4,7 @@ from sqlalchemy.exc import IntegrityError
 
 from .forms import LoginForm, RegistrationForm
 
-from ..app import db
+from ..app import db, app
 from ..models import User
 
 auth = Blueprint('auth', __name__, url_prefix='/auth')
@@ -16,9 +16,9 @@ def register():
         return redirect(url_for('index'))
     form = RegistrationForm()
 
-    if not app.config['REGISTATION_OPEN']:
+    if not app.config['REGISTRATION_OPEN']:
         for field in form:
-            field.disabled=True
+            field.render_kw={'disabled':''}
         return render_template('auth/register.html', form=form)
 
     if form.validate_on_submit():

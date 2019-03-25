@@ -46,6 +46,8 @@ services:
       - "3306"
     environment:
       - "MYSQL_ROOT_PASSWORD=password"
+    labels:
+      - "traefik.enabled=false"
 
 networks:
   traefik-proxy:

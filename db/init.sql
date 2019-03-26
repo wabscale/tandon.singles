@@ -1,6 +1,9 @@
+CREATE DATABASE TS;
+USE TS;
+
 CREATE TABLE Person(
     username VARCHAR(20),
-    password CHAR(64),
+    password VARCHAR(128),
     fname VARCHAR(20),
     lname VARCHAR(20),
     avatar VARCHAR(2048),

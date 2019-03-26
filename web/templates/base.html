@@ -13,13 +13,14 @@
       <meta name="viewport" content="width=device-width, initial-scale=1">
       {{ bootstrap.load_css() }}
       <link rel="stylesheet" href="/static/css/style.css">
+      {% block stylesheets %}{% endblock %}
     </head>
   {% endblock %}
 
   <body>
     <nav class="navbar navbar-expand-sm navbar-inverse" id="top-navbar">
       <div class="container-fluid">
-        <a class="navbar-brand" href="{{ url_for('index') }}" id="index-nav">Tandon.Singles</a>
+        <a class="navbar-brand" href="{{ url_for('home.index') }}" id="index-nav">Tandon.Singles</a>
         {% block navbarleft %}
           <ul lcass="nav navbar-nav mr-auto">
             {# {{ render_nav_item('blueprint.view', 'title', use_li=True) }} #}

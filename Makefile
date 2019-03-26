@@ -79,6 +79,9 @@ setup:
 	if [ -a base/requirements.txt ]; then \
 		touch base/requirements.txt; \
 	fi
+	if [ ! -e web/.data ]; then \
+		mkdir -p web/.data/uploads; \
+	fi
 	which virtualenv && pip install virtualenv || true
 	virtualenv -p ${PYTHON_VERSION} ${ENV_NAME}
 	./${ENV_NAME}/bin/pip install -r base/requirements.txt
@@ -88,7 +91,7 @@ run:
 		make setup; \
 	fi
 	if [ ! -e web/.data ]; then \
-		mkdir web/.data; \
+		mkdir -p web/.data/uploads; \
 	fi
 	./${ENV_NAME}/bin/python ${MAIN_NAME}
 

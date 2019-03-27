@@ -1,5 +1,3 @@
-from typing import List
-
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, timedelta, timezone
 from werkzeug import secure_filename
@@ -7,6 +5,7 @@ from dataclasses import dataclass
 import os
 
 from .app import db, app
+
 
 
 def est_now():
@@ -161,7 +160,7 @@ class Expression:
     def __del__(self, *_):
         pass
 
-    def select(self, *columns):
+    def SELECT(self, *columns):
         """
         All this does is set the type for the expression
         to SELECT and the columns being selected.
@@ -175,8 +174,9 @@ class Expression:
             )
         self._type = 'SELECT'
         self._columns = columns
+        return self
 
-    def _from(self, table):
+    def FROM(self, table):
         """
 
         """
@@ -185,8 +185,9 @@ class Expression:
                 'Expression Type error'
             )
         self._table = table
+        return self
 
-    def join(self, table):
+    def JOIN(self, table):
         """
 
         """
@@ -199,8 +200,9 @@ class Expression:
             self._joins.append(
                 self._JoinedTable(table)
             )
+        return self
 
-    def where(self, **condition):
+    def WHERE(self, **condition):
         """
         Errors will be raised if the type of this expression is not
         SELECT, or if a table has not been specified.
@@ -219,14 +221,15 @@ class Expression:
             self._conditions.append(
                 self._Condition(
                     operator='AND',
-                    attrribute=attribute,
+                    attribute=attribute,
                     value=value,
                 )
             )
 
         self._conditions[0].operator = 'WHERE'
+        return self
 
-    def _and(self, **condition):
+    def AND(self, **condition):
         if self._type != 'SELECT' or self._table is None:
             raise self.ExpressionError()
 
@@ -243,8 +246,9 @@ class Expression:
                     value=value,
                 )
             )
+        return self
 
-    def _or(self, **conditions):
+    def OR(self, **conditions):
         if self._type != 'SELECT' or self._table is None:
             raise self.ExpressionError()
 
@@ -261,6 +265,7 @@ class Expression:
                     value=value,
                 )
             )
+        return self
 
     def _generate_attributes(self):
         """
@@ -270,8 +275,8 @@ class Expression:
         column_info_sql = 'SELECT COLUMN_NAME ' \
             'FROM INFORMATION_SCHEMA.COLUMNS ' \
             'WHERE TABLE_NAME = %s AND TABLE_SCHEMA = DATABASE();'
-
-        all_tables = list(map(lambda jt: jt.ref_table, self._joins)) + [self._table]
+        joined_tables =  list(map(lambda jt: jt.ref_table, self._joins)) if self._joins is not None else []
+        all_tables = joined_tables + [self._table]
         for table_name in all_tables:
             with db.connect() as cursor:
                 cursor.execute(
@@ -298,18 +303,28 @@ class Expression:
         ->
         "WHERE id = %i", (1,)
         """
-        return ' '.join(
+        return (' ' + ' '.join(
             '{operator} {attr} = {placeholder}'.format(
                 operator=operator,
                 attr=attr,
-                placeholder='%s' if type(attr) == str else
-                            '%i' if type(attr) == int else ''
+                placeholder='%s' if type(value) == str else
+                            '%i' if type(value) == int else ''
             )
-            for attr, _, operator in self._conditions
-        ), (
+            for attr, value, operator in self._conditions
+        ), [
             value
             for _, value, _ in self._conditions
-        )
+        ]) if self._conditions is not None else ''
+
+    def _generate_joins(self):
+        """
+        This method will hand back the sql for the
+        joins in the expression.
+        """
+        return ' ' + ' '.join(
+            str(joined_table)
+            for joined_table in self._joins
+        ) if self._joins is not None else ''
 
     def _generate_select(self):
         """
@@ -317,7 +332,19 @@ class Expression:
 
         :return: sql_str, (args,)
         """
-        base = 'SELECT {columns} FROM {table} {joins} {conditions}'
+        base = 'SELECT {columns} FROM {table}{joins}{conditions};'
+
+        table = self._table
+        columns = ', '.join(self._columns)
+        conditions, args = self._generate_conditions()
+        joins = self._generate_joins()
+
+        return base.format(
+            conditions=conditions,
+            columns=columns,
+            table=table,
+            joins=joins,
+        ), args
 
     def generate(self):
         """

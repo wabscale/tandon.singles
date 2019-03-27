@@ -346,7 +346,7 @@ class Expression:
             joins=joins,
         ), args
 
-    def generate(self):
+    def gen(self):
         """
         This should take the object state, and convert it
         into a functioning sql statement, along with its arguments.
@@ -356,12 +356,28 @@ class Expression:
 
         :return: sql_str, (args,)
         """
+        return self._generate_select() \
+            if self._type == 'SELECT' else \
+               self._generate_insert() \
+               if self._type == 'INSERT' else ''
 
     def execute(self):
         """
         This method should generate the sql, run it,
-        then hand back the result.
+        then hand back the result (if expression type
+        is SELECT).
+
+        ** importaint to note that this does not
+        handle pymysql.err.IntegrityError's
+
+        ** If the expression type is a SELECT, the
+        return value will be cursor.fetchall()
         """
+        with db.connect() as cursor:
+            cursor.execute(
+                *self.gen()
+            )
+            return cursor.fetchall() if self._type == 'SELECT' else None
 
 
 class BaseModel:

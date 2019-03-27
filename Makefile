@@ -85,6 +85,7 @@ setup:
 	which virtualenv && pip install virtualenv || true
 	virtualenv -p ${PYTHON_VERSION} ${ENV_NAME}
 	./${ENV_NAME}/bin/pip install -r base/requirements.txt
+	./${ENV_NAME}/bin/pip install -r requirements.txt
 
 run:
 	if [ ! -d ${ENV_NAME} ]; then \

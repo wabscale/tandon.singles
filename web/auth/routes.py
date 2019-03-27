@@ -13,7 +13,7 @@ auth = Blueprint('auth', __name__, url_prefix='/auth')
 @auth.route('/register', methods=['GET', 'POST'])
 def register():
     if current_user.is_authenticated:
-        return redirect(url_for('index'))
+        return redirect(url_for('home.index'))
     form = RegistrationForm()
     registration_enabled = app.config['REGISTRATION_ENABLED']
 
@@ -26,7 +26,7 @@ def register():
         try:
             u = User.create(form.username.data, form.password.data)
             login_user(u)
-            return redirect(url_for('index'))
+            return redirect(url_for('home.index'))
         except pymysql.err.IntegrityError:
             flash('Username already in use')
     return render_template(
@@ -39,7 +39,7 @@ def register():
 @auth.route('/login', methods=['GET', 'POST'])
 def login():
     if current_user.is_authenticated:
-        return redirect(url_for('index'))
+        return redirect(url_for('home.index'))
     form = LoginForm()
     if form.validate_on_submit():
         u = User(form.username.data)
@@ -47,7 +47,7 @@ def login():
             flash('Invalid username or password')
             return render_template('auth/login.html', form=form)
         login_user(u)
-        return redirect(url_for('index'))
+        return redirect(url_for('home.index'))
     return render_template('auth/login.html', form=form)
 
 
@@ -55,4 +55,4 @@ def login():
 @login_required
 def logout():
     logout_user()
-    return redirect(url_for('index'))
+    return redirect(url_for('home.index'))

@@ -9,5 +9,5 @@ deploy_ts:
     - make build
     - make deploy
   only:
-    ref:
+    refs:
       - master

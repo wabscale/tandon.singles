@@ -1,3 +1,5 @@
+from typing import List
+
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, timedelta, timezone
 from werkzeug import secure_filename
@@ -38,9 +40,17 @@ class Expression:
 
     @dataclass
     class _Condition:
-        operator: str = None
         attribute: str
         value: str
+        operator: str = None
+
+        def __iter__(self):
+            """
+            This is here so that _Condition object can be unpacked
+            """
+            yield self.attribute
+            yield self.value
+            yield self.operator
 
     @dataclass
     class _Attribute:
@@ -85,7 +95,7 @@ class Expression:
             keys not defined).
             """
             if self.sql is not None:
-                return sql.sql
+                return self.sql
             with db.connect() as cursor:
                 cursor.execute(
                     self.ref_info_sql,
@@ -106,7 +116,7 @@ class Expression:
             self.sql =  'JOIN {ref_table}'.format(
                 ref_table=self.ref_table
             ) if self.join_attr.is_same() else 'JOIN {ref_table} ON {table}.{name} = {ref_table}.{ref}'.format(
-                table=self.table,
+                table=self.current_table,
                 ref_table=self.ref_table,
                 name=self.join_attr.name,
                 ref_name=self.join_attr.ref_name,
@@ -166,7 +176,6 @@ class Expression:
         self._type = 'SELECT'
         self._columns = columns
 
-
     def _from(self, table):
         """
 
@@ -176,7 +185,6 @@ class Expression:
                 'Expression Type error'
             )
         self._table = table
-
 
     def join(self, table):
         """
@@ -216,6 +224,8 @@ class Expression:
                 )
             )
 
+        self._conditions[0].operator = 'WHERE'
+
     def _and(self, **condition):
         if self._type != 'SELECT' or self._table is None:
             raise self.ExpressionError()
@@ -243,7 +253,7 @@ class Expression:
                 'Use where clause before applying an OR'
             )
 
-        for attribute, value in condition.items():
+        for attribute, value in conditions.items():
             self._conditions.append(
                 self._Condition(
                     operator='OR',
@@ -276,6 +286,30 @@ class Expression:
                             value=attr,
                         )
                     )
+
+    def _generate_conditions(self):
+        """
+        This will hand back the sql as a string, and the
+        args to fill the prepared placeholders
+
+        ex:
+
+        self._generate_conditions()
+        ->
+        "WHERE id = %i", (1,)
+        """
+        return ' '.join(
+            '{operator} {attr} = {placeholder}'.format(
+                operator=operator,
+                attr=attr,
+                placeholder='%s' if type(attr) == str else
+                            '%i' if type(attr) == int else ''
+            )
+            for attr, _, operator in self._conditions
+        ), (
+            value
+            for _, value, _ in self._conditions
+        )
 
     def _generate_select(self):
         """
@@ -314,8 +348,6 @@ class BaseModel:
     __columns__ = None
     __foreign_tables__ = None
 
-
-
     def __init__(self, *args):
         """
         Will fetch names of columns when initially called.
@@ -338,13 +370,12 @@ class BaseModel:
         for key, val in zip(self.__columns__, args):
             self.__setattr__(key, val)
 
-
     def __getattribute__(self, key):
         """
         I want this to lazy load out foreign attributes.
         """
-        if key in __dir__:
-            return __dir__[key]
+        if key in self.__dir__:
+            return self.__dir__[key]
 
 
 class Photo(BaseModel):

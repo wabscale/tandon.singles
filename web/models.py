@@ -7,7 +7,6 @@ import os
 from .app import db, app
 
 
-
 def est_now():
     """
     Get EST now datetime object.
@@ -19,7 +18,8 @@ def est_now():
 class Expression:
     """
     _type    : type of expression (select, insert, ...)
-    _table   : BaseModel
+    _table   : str
+    _tables  : [ self._Table ]
     _columns : str
     _joins   : [ str ]
     _where   : [ _Condition ]
@@ -40,6 +40,7 @@ class Expression:
     @dataclass
     class _Condition:
         attribute: str
+        attribute_table: str
         value: str
         operator: str = None
 
@@ -48,6 +49,7 @@ class Expression:
             This is here so that _Condition object can be unpacked
             """
             yield self.attribute
+            yield self.attribute_table
             yield self.value
             yield self.operator
 
@@ -56,7 +58,35 @@ class Expression:
         table: str
         name: str
 
-    class _JoinedTable:
+    class _Table:
+        column_info_sql = 'SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS ' \
+            'WHERE TABLE_NAME = %s AND TABLE_SCHEMA = DATABASE();'
+
+        def __init__(self, name):
+            self.name = name
+            self.columns = self._get_columns()
+
+        def _get_columns(self):
+            """
+            returns list of columsn for self.ref_table
+            """
+            with db.connect() as cursor:
+                cursor.execute(
+                    self.column_info_sql,
+                    (self.name,)
+                )
+                return list(map(
+                    lambda col: col[0],
+                    cursor.fetchall()
+                ))
+
+        def __str__(self):
+            """
+            Purly convience.
+            """
+            return self.name
+
+    class _JoinedTable(_Table):
         """
         Provide this object with the name of the current table,
         and the table to join, and it will generate the sql to
@@ -75,15 +105,17 @@ class Expression:
         class JoinError(Exception):
             pass
 
+
         ref_info_sql = 'SELECT COLUMN_NAME, REFERENCED_COLUMN_NAME ' \
             'FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE ' \
             'WHERE TABLE_NAME = %s AND REFERENCED_TABLE_NAME = %s AND TABLE_SCHEMA = DATABASE();'
 
         def __init__(self, current_table, ref_table):
-            self.current_table = current_table
-            self.ref_table = ref_table
+            super(self.__class__, self).__init__(ref_table)
+            self.current_table = current_table.name
             self.join_attr = None
             self.sql = None
+
 
         def _gen(self):
             """
@@ -98,25 +130,26 @@ class Expression:
             with db.connect() as cursor:
                 cursor.execute(
                     self.ref_info_sql,
-                    (self.current_table, self.ref_table,)
+                    (self.name, self.current_table,)
                 )
-                res = cursor.fetchall()
+                res = cursor.fetchone()
 
                 if res is None: # sanity check
                     raise self.JoinError(
                         'Invalid Join'
                     )
-                name, ref_name = res
+
+                ref_name, name = res
                 self.join_attr = self._JoinAttribute(
                     name=name,
                     ref_name=ref_name
                 )
 
             self.sql =  'JOIN {ref_table}'.format(
-                ref_table=self.ref_table
-            ) if self.join_attr.is_same() else 'JOIN {ref_table} ON {table}.{name} = {ref_table}.{ref}'.format(
+                ref_table=self.name
+            ) if self.join_attr.is_same() else 'JOIN {ref_table} ON `{table}`.`{name}` = `{ref_table}`.`{ref_name}`'.format(
                 table=self.current_table,
-                ref_table=self.ref_table,
+                ref_table=self.name,
                 name=self.join_attr.name,
                 ref_name=self.join_attr.ref_name,
             )
@@ -129,12 +162,17 @@ class Expression:
         """
         Only needs to null out all the state attributes.
         """
-        self._type        = None
-        self._table       = None
-        self._columns     = None
-        self._joins       = None
-        self._conditions  = None
-        self._attrs       = None
+        self._type          = None
+        self._table         = None
+        self._attrs         = None
+
+        # SELECT
+        self._columns       = None
+        self._joins         = None
+        self._conditions    = None
+
+        # INSERT
+        self._insert_values = None
 
     def __enter__(self):
         """
@@ -160,6 +198,56 @@ class Expression:
     def __del__(self, *_):
         pass
 
+    def _resolve_attribute(self, attr_name):
+        """
+        This method will take an attribute name, and
+        try to find the table it came from. It will search
+        in order starting with self._table, then iterate
+        through self._joins.
+        """
+        for column in self._table.columns:
+            if column == attr_name:
+                return self._table.name
+        for joined_table in self._joins:
+            for column in joined_table:
+                if column == attr_name:
+                    return joined_table.name
+
+    def INSERT(self, **values):
+        """
+        First method that should be called in INSERT expression.
+        """
+        if self._type is not None:
+            raise self.ExpressionError(
+                'Expressions Type error'
+            )
+
+        if self._insert_values is not None:
+            raise self.ExpressionError(
+                'Insert Expression values already set'
+            )
+
+        self._type = 'INSERT'
+        self._insert_values = values
+        return self
+
+    def INTO(self, table):
+        """
+        Sets table for INSERT expression.
+        """
+        if self._type != 'INSERT':
+            raise self.ExpressionError(
+                'Expression Type error'
+            )
+
+        if self._table is not None:
+            raise self.ExpressionError(
+                'Table already set for INSERT expression'
+            )
+
+        self._table = table
+        return self
+
     def SELECT(self, *columns):
         """
         All this does is set the type for the expression
@@ -184,7 +272,7 @@ class Expression:
             raise self.ExpressionError(
                 'Expression Type error'
             )
-        self._table = table
+        self._table = self._Table(table)
         return self
 
     def JOIN(self, table):
@@ -198,7 +286,7 @@ class Expression:
         if self._joins is None:
             self._joins = list()
             self._joins.append(
-                self._JoinedTable(table)
+                self._JoinedTable(self._table, table)
             )
         return self
 
@@ -218,10 +306,12 @@ class Expression:
         self._conditions = list()
 
         for attribute, value in condition.items():
+            attribute_table = self._resolve_attribute(attribute)
             self._conditions.append(
                 self._Condition(
                     operator='AND',
                     attribute=attribute,
+                    attribute_table=attribute_table,
                     value=value,
                 )
             )
@@ -239,10 +329,12 @@ class Expression:
             )
 
         for attribute, value in condition.items():
+            attribute_table = self._resolve_attribute(attribute)
             self._conditions.append(
                 self._Condition(
                     operator='AND',
-                    attrribute=attribute,
+                    attribute=attribute,
+                    attribute_table=attribute_table,
                     value=value,
                 )
             )
@@ -258,10 +350,12 @@ class Expression:
             )
 
         for attribute, value in conditions.items():
+            attribute_table = self._resolve_attribute(attribute)
             self._conditions.append(
                 self._Condition(
                     operator='OR',
-                    attrribute=attribute,
+                    attribute=attribute,
+                    attribute_table=attribute_table,
                     value=value,
                 )
             )
@@ -304,17 +398,18 @@ class Expression:
         "WHERE id = %i", (1,)
         """
         return (' ' + ' '.join(
-            '{operator} {attr} = {placeholder}'.format(
-                operator=operator,
-                attr=attr,
+            '{operator} `{table}`.`{attr}` = {placeholder}'.format(
                 placeholder='%s' if type(value) == str else
-                            '%i' if type(value) == int else ''
+                            '%i' if type(value) == int else '',
+                operator=operator,
+                table=table,
+                attr=attr,
             )
-            for attr, value, operator in self._conditions
+            for attr, table, value, operator in self._conditions
         ), [
             value
-            for _, value, _ in self._conditions
-        ]) if self._conditions is not None else ''
+            for _, _, value, _ in self._conditions
+        ]) if self._conditions is not None else ('',[])
 
     def _generate_joins(self):
         """
@@ -332,10 +427,18 @@ class Expression:
 
         :return: sql_str, (args,)
         """
+        if self._type != 'SELECT' or self._columns is None or self._table is None:
+            raise self.ExpressionError(
+                'Expression state incomplete'
+            )
+
         base = 'SELECT {columns} FROM {table}{joins}{conditions};'
 
-        table = self._table
-        columns = ', '.join(self._columns)
+        table = '`{table}`'.format(table=self._table)
+        columns = ', '.join('`{column_table}`.`{column_name}`'.format(
+            column_table=self._resolve_attribute(column_name),
+            column_name=column_name
+        ) for column_name in self._columns)
         conditions, args = self._generate_conditions()
         joins = self._generate_joins()
 
@@ -345,6 +448,34 @@ class Expression:
             table=table,
             joins=joins,
         ), args
+
+    def _generate_insert(self):
+        """
+        This should hand back the prepared sql, and args for the insert values.
+        """
+        if self._type != 'INSERT' or self._table is None or self._insert_values is None:
+            raise self.ExpressionError(
+                'Expression state incomplete'
+            )
+
+        table=self._table
+        columns = ', '.join('`{column_name}`'.format(
+            column_name=column_name
+        ) for column_name in self._insert_values.keys())
+        values = ', '.join(
+            '%s' if type(value) == str else '%i' if type (value) == int else ''
+            for value in self._insert_values.values()
+        )
+
+        sql = 'INSERT INTO {table} ({columns}) VALUES ({values});'.format(
+            columns=columns,
+            values=values,
+            table=table,
+        )
+
+        return sql, list(
+            self._insert_values.values()
+        )
 
     def gen(self):
         """
@@ -525,3 +656,6 @@ class User:
                 (username, generate_password_hash(password),)
             )
         return User(username)
+
+
+print(Expression().SELECT('username').FROM('Person').JOIN('Photo').WHERE(username='abc').gen())

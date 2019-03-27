@@ -114,9 +114,10 @@ class SQL:
             'FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE ' \
             'WHERE TABLE_NAME = %s AND REFERENCED_TABLE_NAME = %s AND TABLE_SCHEMA = DATABASE();'
 
-        def __init__(self, current_table, ref_table):
+        def __init__(self, current_table, joins, ref_table):
             super(self.__class__, self).__init__(ref_table)
             self.current_table = current_table.name
+            self.joins = joins
             self.join_attr = None
             self.sql = None
 
@@ -131,17 +132,22 @@ class SQL:
             """
             if self.sql is not None:
                 return self.sql
-            with db.connect() as cursor:
-                cursor.execute(
-                    self.ref_info_sql,
-                    (self.name, self.current_table,)
-                )
-                res = cursor.fetchone()
+            res = None
 
-                if res is None: # sanity check
-                    raise self.JoinError(
-                        'Invalid Join'
+            for table_name in [self.name] + self.joins:
+                with db.connect() as cursor:
+                    cursor.execute(
+                        self.ref_info_sql,
+                        (table_name, self.current_table,)
                     )
+                    res = cursor.fetchone()
+                    if res is not None:
+                        break
+
+            if res is None: # sanity check
+                raise self.JoinError(
+                    'Invalid Join'
+                )
 
                 ref_name, name = res
                 self.join_attr = self._JoinAttribute(
@@ -281,7 +287,7 @@ class SQL:
         if self._joins is None:
             self._joins = list()
             self._joins.append(
-                self._JoinedTable(self._table, table)
+                self._JoinedTable(self._table, self._joins, table)
             )
         return self
 
@@ -395,14 +401,14 @@ class SQL:
         return (' ' + ' '.join(
             '{operator} `{table}`.`{attr}` = {placeholder}'.format(
                 placeholder='%s' if type(value) == str else
-                            '%i' if type(value) == int else '',
+                '%i' if type(value) in (int,bool,) else '',
                 operator=operator,
                 table=table,
                 attr=attr,
             )
             for attr, table, value, operator in self._conditions
         ), [
-            value
+            value if type(value) != bool else int(value)
             for _, _, value, _ in self._conditions
         ]) if self._conditions is not None else ('',[])
 
@@ -458,7 +464,7 @@ class SQL:
             column_name=column_name
         ) for column_name in self._insert_values.keys())
         values = ', '.join(
-            '%s' if type(value) == str else '%i' if type (value) == int else ''
+            '%s' if type(value) == str else '%i' if type (value) in (int,bool,) else ''
             for value in self._insert_values.values()
         )
 
@@ -469,7 +475,8 @@ class SQL:
         )
 
         return sql, list(
-            self._insert_values.values()
+            value if type(value) != bool else int(value)
+            for value in self._insert_values.values()
         )
 
     def gen(self):
@@ -571,7 +578,7 @@ class Photo(BaseModel):
         ).INTO('Photo').execute()
 
     @staticmethod
-    def get_photos_by_owner(username):
+    def ownded_by(username):
         """
         Generates list of Photo object owner by username
 
@@ -586,6 +593,37 @@ class Photo(BaseModel):
             for photo in SQL.SELECT('*').FROM('Photos').WHERE(owner=username).execute()
         ]
 
+    @staticmethod
+    def visible_to(username):
+        """
+        Should give back all photo object that are visible to username
+
+        TODO:
+        need to make this order all photos by timestamp
+
+        :return: [ Photo ]
+        """
+        return [
+            # photos that are in close friend groups that username is in
+            Photo(*photo)
+            for photo in SQL.SELECT('*').From('Photos').JOIN('Share').JOIN('CloseFriendGroup').JOIN('Belong').WHERE(
+                    username=username
+            ).execute()
+        ] + [
+            # subscibed photos
+            Photo(*photo)
+            for photo in SQL.SELECT('*').FROM('Photos').JOIN('Follow').WHERE(
+                    followeeUsername=username,
+                    acceptedfollow=True
+            ).execute()
+        ] + [
+            # users photos
+            Photo(*photo)
+            for photo in SQL.SELECT('*').FROM('Photos').JOIN('Person').WHERE(
+                    username=username
+            ).execute()
+        ]
+
 
 class User:
     """
@@ -594,9 +632,9 @@ class User:
     """
     def __init__(self, username):
         self.username, self.password = (None,)*2
-        res = SQL.SELECT('username', 'password').FROM('Person').WHERE(username=username).execute()[0]
-        if res is not None:
-            self.username, self.password = res
+        res = SQL.SELECT('username', 'password').FROM('Person').WHERE(username=username).execute()
+        if len(res) == 1:
+            self.username, self.password = res[0]
 
     def check_password(self, pword):
         return check_password_hash(self.password, pword) if self.username is not None else False
@@ -613,11 +651,14 @@ class User:
     def get_id(self):
         return self.username
 
-    def get_photos(self):
+    def get_owned_photos(self):
         """
         :return list: Photo object owned by self.username
         """
-        return Photo.get_photos_by_owner(self.username)
+        return Photo.owned_by(self.username)
+
+    def get_feed(self):
+        return Photo.visible_to(self.username)
 
     @staticmethod
     def create(username, password):
@@ -629,7 +670,7 @@ class User:
         :return User: new User object
         """
         password=generate_password_hash(password)
-        SQL.INSERT(username=username, password=password).INTO(Person).execute()
+        SQL.INSERT(username=username, password=password).INTO('Person').execute()
         return User(username)
 
 

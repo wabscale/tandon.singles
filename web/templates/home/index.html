@@ -2,6 +2,100 @@
 
 {% block content %}
   <div class="container-fluid">
-    {{ render_form(form) }}
+    {# new post form #}
+    <div class="col-md-4 offset-md-4">
+      <div class="card">
+        <div class="card-body">
+          {{ render_form(form) }}
+        </div>
+      </div>
+    </div>
+    <br>
+
+    {# posts to see #}
+    <div class="card-columns">
+      {% for photo in photos %}
+        {% set comments = photo.get_comments() %}
+        <div class="card">
+          <img src="/users/{{ photo.photoOwner }}/img/{{ photo.filePath }}" alt="{{ photo.photoOwner }}">
+
+          <div class="card-body">
+            <h4>{{ photo.photoOwner }}</h4>
+            <p class="card-text">{{ photo.caption }}</p>
+            <button data-toggle="collapse" data-target="#photo-comments-{{ photo.photoID }}" class="btn btn-primary">
+              Comments
+              <span class="badge badge-light">{{ comments | length }}</span>
+            </button>
+          </div>
+
+          <div class="card-footer">
+
+            {# like button #}
+            {% if photo.liked_by(current_user.username) %}
+              <a href="#?unlike={{ photoID }}" class="btn btn-danger">Unlike</a>
+            {% else %}
+              <a href="#?like={{ photoID }}"  class="btn btn-success">Like</a>
+            {% endif %}
+
+            {# comments #}
+            <div id="photo-comments-{{ photo.photoID }}" class="colapse">
+              {% for comment in comments %}
+                <div class="card">
+                  <div class="card-header">
+                    <div class="shadow-sm p-4 mb-4 bg-dark">
+                      <h2>{{ comment.username }}</h2>
+                    </div>
+                  </div>
+                  <div class="card-body">
+                    <div class="shadow p-4 mb-4 bg-dark">
+                      <p class="card-text">
+                        {{ comment.commentText }}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                <br>
+              {% endfor %}
+              <br>
+
+              {# comment modal for current photo #}
+              <div class="modal fade" id="modalCommentForm" tabindex="-1" role="dialog" aria-labelledby="myModalLabel" aria-hidden="true">
+                <div class="modal-dialog" role="document">
+                  <div class="modal-content">
+                    {# model title #}
+                    <div class="modal-header text-center">
+                      <h4 class="modal-title w-100 font-weight-bold">Comment</h4>
+                      <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                      </button>
+                    </div>
+
+                    {# input field #}
+                    <div class="modal-body mx-3">
+                      <div class="md-form mb-5">
+                        <input type="text" id="defaultForm-email" class="form-control validate">
+                        <label data-error="wrong" data-success="right" for="defaultForm-email">content</label>
+                      </div>
+                    </div>
+
+                    {# submit #}
+                    <div class="modal-footer d-flex justify-content-center">
+                      <button class="btn btn-default">Submit</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {# model activate button #}
+              <div class="text-center">
+                <a href="" class="btn btn-default btn-rounded mb-4" data-toggle="modal" data-target="#modalCommentForm">
+                  Comment
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+      {% endfor %}
+    </div>
   </div>
 {% endblock %}

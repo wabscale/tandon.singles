@@ -20,11 +20,13 @@ db = MySQL(app)
 from .auth import auth
 from .users import users
 from .home import home
+from .api import api
 
 list(map(app.register_blueprint, (
     home,
     auth,
-    users
+    users,
+    api
 )))
 
 

@@ -15,7 +15,7 @@ def est_now():
     return datetime.now(tz=timezone(offset=timedelta(hours=-5)))
 
 
-class Expression:
+class SQL:
     """
     _type    : type of expression (select, insert, ...)
     _table   : str
@@ -30,7 +30,11 @@ class Expression:
     _joins: names of tables that are being joined
     _where: list of conditions to be applied
     _attrs: names of accessable attributes (foreign and local)
+
+    __verbose__: bool
     """
+
+    __verbose__ = True
 
     class ExpressionError(Exception):
         """
@@ -164,6 +168,7 @@ class Expression:
         """
         self._type          = None
         self._table         = None
+        self._sql           = None
         self._attrs         = None
 
         # SELECT
@@ -209,27 +214,19 @@ class Expression:
             if column == attr_name:
                 return self._table.name
         for joined_table in self._joins:
-            for column in joined_table:
+            for column in joined_table.columns:
                 if column == attr_name:
                     return joined_table.name
 
-    def INSERT(self, **values):
+    @staticmethod
+    def INSERT(**values):
         """
         First method that should be called in INSERT expression.
         """
-        if self._type is not None:
-            raise self.ExpressionError(
-                'Expressions Type error'
-            )
-
-        if self._insert_values is not None:
-            raise self.ExpressionError(
-                'Insert Expression values already set'
-            )
-
-        self._type = 'INSERT'
-        self._insert_values = values
-        return self
+        e=SQL()
+        e._type = 'INSERT'
+        e._insert_values = values
+        return e
 
     def INTO(self, table):
         """
@@ -248,7 +245,8 @@ class Expression:
         self._table = table
         return self
 
-    def SELECT(self, *columns):
+    @staticmethod
+    def SELECT(*columns):
         """
         All this does is set the type for the expression
         to SELECT and the columns being selected.
@@ -256,13 +254,10 @@ class Expression:
         This will throw and error if an expression type has already
         been specified.
         """
-        if self._type is not None:
-            raise self.ExpressionError(
-                'Expression Type error'
-            )
-        self._type = 'SELECT'
-        self._columns = columns
-        return self
+        e=SQL()
+        e._type = 'SELECT'
+        e._columns = columns
+        return e
 
     def FROM(self, table):
         """
@@ -467,7 +462,7 @@ class Expression:
             for value in self._insert_values.values()
         )
 
-        sql = 'INSERT INTO {table} ({columns}) VALUES ({values});'.format(
+        sql = 'INSERT INTO `{table}` ({columns}) VALUES ({values});'.format(
             columns=columns,
             values=values,
             table=table,
@@ -487,10 +482,14 @@ class Expression:
 
         :return: sql_str, (args,)
         """
-        return self._generate_select() \
-            if self._type == 'SELECT' else \
-               self._generate_insert() \
-               if self._type == 'INSERT' else ''
+        if self._sql is None:
+            self._sql = self._generate_select() \
+                if self._type == 'SELECT' else \
+                   self._generate_insert() \
+                   if self._type == 'INSERT' else ''
+            if self.__verbose__:
+                print(self._sql)
+        return self._sql
 
     def execute(self):
         """
@@ -504,9 +503,10 @@ class Expression:
         ** If the expression type is a SELECT, the
         return value will be cursor.fetchall()
         """
+        self.gen()
         with db.connect() as cursor:
             cursor.execute(
-                *self.gen()
+                *self._sql
             )
             return cursor.fetchall() if self._type == 'SELECT' else None
 
@@ -518,7 +518,6 @@ class BaseModel:
     methods).
     """
     __table__ = None
-    __schemata__ = 'TS'
     __columns__ = None
     __foreign_tables__ = None
 
@@ -532,14 +531,8 @@ class BaseModel:
             if self.__table__ is None:
                 raise NotImplementedError('__table__ not implemented')
 
-            with db.connect() as cursor:
-                _attrs = cursor.execute(
-                    'SELECT COLUMN_NAME FROM information_schema.columns '
-                    'WHERE TABLE_SCHEMATA = %s AND TABLE_NAME = %s;',
-                    (self.__schemata__, self.__table__)
-                )
-                cursor.fetchall()
-                self.__columns__ = list(map(lambda x: x[0], _attrs))
+            self.__columns__ = SQL._Table(self.__table__).columns
+            self.__columns__ = list(map(lambda x: x[0], __columns__))
 
         for key, val in zip(self.__columns__, args):
             self.__setattr__(key, val)
@@ -558,7 +551,6 @@ class Photo(BaseModel):
     @staticmethod
     def create(image, owner, caption, all_followers):
         """
-
         :param image:
         :param owner:
         :param caption:
@@ -570,12 +562,13 @@ class Photo(BaseModel):
             secure_filename(image.data.filename)
         )
         image.data.save()
-        with db.connect() as cursor:
-            cursor.execute(
-                'INSERT INTO Photo (photoOwner, timestamp, filePath, caption, allFollowers) '
-                'VALUES (%s, %s, %s, %s, %i)',
-                (owner.username, str(est_now()), file_path, caption, all_followers)
-            )
+        SQL.INSERT(
+            allFollowers=all_followers,
+            photoOwner=owner.username,
+            timestamp=str(set_now()),
+            filePath=file_path,
+            caption=caption,
+        ).INTO('Photo').execute()
 
     @staticmethod
     def get_photos_by_owner(username):
@@ -588,17 +581,10 @@ class Photo(BaseModel):
             ...
         ]
         """
-        with db.connect() as cursor:
-            cursor.execute(
-                'SELECT * FROM Photos '
-                'JOIN Person '
-                'WHERE Person.owner = %s',
-                (username,)
-            )
-            return [
-                Photo(*photo)
-                for photo in cursor.fetchall()
-            ]
+        return [
+            Photo(*photo)
+            for photo in SQL.SELECT('*').FROM('Photos').WHERE(owner=username).execute()
+        ]
 
 
 class User:
@@ -608,16 +594,9 @@ class User:
     """
     def __init__(self, username):
         self.username, self.password = (None,)*2
-        with db.connect() as cursor:
-            cursor.execute(
-                'SELECT username, password '
-                'FROM Person '
-                'WHERE username = %s;',
-                (username,)
-            )
-            res = cursor.fetchone()
-            if res is not None:
-                self.username, self.password = res
+        res = SQL.SELECT('username', 'password').FROM('Person').WHERE(username=username).execute()[0]
+        if res is not None:
+            self.username, self.password = res
 
     def check_password(self, pword):
         return check_password_hash(self.password, pword) if self.username is not None else False
@@ -649,13 +628,11 @@ class User:
         :param str password:
         :return User: new User object
         """
-        with db.connect() as cursor:
-            cursor.execute(
-                'INSERT INTO Person (username, password) VALUES '
-                '(%s, %s);',
-                (username, generate_password_hash(password),)
-            )
+        password=generate_password_hash(password)
+        SQL.INSERT(username=username, password=password).INTO(Person).execute()
         return User(username)
 
 
-# print(Expression().SELECT('username').FROM('Person').JOIN('Photo').WHERE(username='abc').gen())
+# e = SQL()
+# print(e.SELECT('username').FROM('Person').JOIN('Photo').WHERE(photoOwner='abc').gen())
+# print(e.INSERT(username='d',password='pwrod').INTO('Person').execute())

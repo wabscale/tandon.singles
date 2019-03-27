@@ -658,4 +658,4 @@ class User:
         return User(username)
 
 
-print(Expression().SELECT('username').FROM('Person').JOIN('Photo').WHERE(username='abc').gen())
+# print(Expression().SELECT('username').FROM('Person').JOIN('Photo').WHERE(username='abc').gen())

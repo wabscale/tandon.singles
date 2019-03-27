@@ -1,6 +1,7 @@
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, timedelta, timezone
 from werkzeug import secure_filename
+from dataclasses import dataclass
 import os
 
 from .app import db, app
@@ -14,10 +15,292 @@ def est_now():
     return datetime.now(tz=timezone(offset=timedelta(hours=-5)))
 
 
-class struct:
-    def __init__(self, **kwargs):
-        for key, val in kwargs.items():
-            self.__setattr__(key, val)
+class Expression:
+    """
+    _type    : type of expression (select, insert, ...)
+    _table   : BaseModel
+    _columns : str
+    _joins   : [ str ]
+    _where   : [ _Condition ]
+    _attrs   : [ str ]
+
+    _table: name of table being selected from
+    _columns: names of columns being selected
+    _joins: names of tables that are being joined
+    _where: list of conditions to be applied
+    _attrs: names of accessable attributes (foreign and local)
+    """
+
+    class ExpressionError(Exception):
+        """
+        Generic Exception, nothing special.
+        """
+
+    @dataclass
+    class _Condition:
+        operator: str = None
+        attribute: str
+        value: str
+
+    @dataclass
+    class _Attribute:
+        table: str
+        name: str
+
+    class _JoinedTable:
+        """
+        Provide this object with the name of the current table,
+        and the table to join, and it will generate the sql to
+        successfully join the tables together (with __str__).
+
+        The sql generation is lazy
+        """
+        @dataclass
+        class _JoinAttribute:
+            name: str
+            ref_name: str = None
+
+            def is_same(self):
+                return self.name == self.ref_name
+
+        class JoinError(Exception):
+            pass
+
+        ref_info_sql = 'SELECT COLUMN_NAME, REFERENCED_COLUMN_NAME ' \
+            'FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE ' \
+            'WHERE TABLE_NAME = %s AND REFERENCED_TABLE_NAME = %s AND TABLE_SCHEMA = DATABASE();'
+
+        def __init__(self, current_table, ref_table):
+            self.current_table = current_table
+            self.ref_table = ref_table
+            self.join_attr = None
+            self.sql = None
+
+        def _gen(self):
+            """
+            This will figure out foreign keys, then give back the proper
+            sql to join the given tables.
+
+            Errors will be raised if the join is not possible (if foreign
+            keys not defined).
+            """
+            if self.sql is not None:
+                return sql.sql
+            with db.connect() as cursor:
+                cursor.execute(
+                    self.ref_info_sql,
+                    (self.current_table, self.ref_table,)
+                )
+                res = cursor.fetchall()
+
+                if res is None: # sanity check
+                    raise self.JoinError(
+                        'Invalid Join'
+                    )
+                name, ref_name = res
+                self.join_attr = self._JoinAttribute(
+                    name=name,
+                    ref_name=ref_name
+                )
+
+            self.sql =  'JOIN {ref_table}'.format(
+                ref_table=self.ref_table
+            ) if self.join_attr.is_same() else 'JOIN {ref_table} ON {table}.{name} = {ref_table}.{ref}'.format(
+                table=self.table,
+                ref_table=self.ref_table,
+                name=self.join_attr.name,
+                ref_name=self.join_attr.ref_name,
+            )
+            return self.sql
+
+        def __str__(self):
+            return self._gen()
+
+    def __init__(self):
+        """
+        Only needs to null out all the state attributes.
+        """
+        self._type        = None
+        self._table       = None
+        self._columns     = None
+        self._joins       = None
+        self._conditions  = None
+        self._attrs       = None
+
+    def __enter__(self):
+        """
+        __enter__ called in with statement. The intended behavior is that you
+        make your expression in the with, then use as to set it to a variable,
+        and it will execute the expression, and set the result to the variable.
+
+        eg:
+
+        with Expression().select('*')._from('Users') as users:
+            print(users)
+
+        (
+            id,
+            username,
+            password
+        ),
+        ...
+
+        """
+        return self.execute()
+
+    def __del__(self, *_):
+        pass
+
+    def select(self, *columns):
+        """
+        All this does is set the type for the expression
+        to SELECT and the columns being selected.
+
+        This will throw and error if an expression type has already
+        been specified.
+        """
+        if self._type is not None:
+            raise self.ExpressionError(
+                'Expression Type error'
+            )
+        self._type = 'SELECT'
+        self._columns = columns
+
+
+    def _from(self, table):
+        """
+
+        """
+        if self._type != 'SELECT' or self._table is not None:
+            raise self.ExpressionError(
+                'Expression Type error'
+            )
+        self._table = table
+
+
+    def join(self, table):
+        """
+
+        """
+        if self._type != 'SELECT' or self._table is None:
+            raise self.ExpressionError(
+                'Expression Type error'
+            )
+        if self._joins is None:
+            self._joins = list()
+            self._joins.append(
+                self._JoinedTable(table)
+            )
+
+    def where(self, **condition):
+        """
+        Errors will be raised if the type of this expression is not
+        SELECT, or if a table has not been specified.
+
+        If more than one condition is specified, it will by default
+        apply AND logic between the conditions.
+        """
+        if self._type != 'SELECT' or self._table is None or self._conditions is not None:
+            raise self.ExpressionError(
+                'Expression Type error'
+            )
+
+        self._conditions = list()
+
+        for attribute, value in condition.items():
+            self._conditions.append(
+                self._Condition(
+                    operator='AND',
+                    attrribute=attribute,
+                    value=value,
+                )
+            )
+
+    def _and(self, **condition):
+        if self._type != 'SELECT' or self._table is None:
+            raise self.ExpressionError()
+
+        if len(self._conditions) == 0:
+            raise self.ExpressionError(
+                'Use where clause before applying an AND'
+            )
+
+        for attribute, value in condition.items():
+            self._conditions.append(
+                self._Condition(
+                    operator='AND',
+                    attrribute=attribute,
+                    value=value,
+                )
+            )
+
+    def _or(self, **conditions):
+        if self._type != 'SELECT' or self._table is None:
+            raise self.ExpressionError()
+
+        if len(self._conditions) == 0:
+            raise self.ExpressionError(
+                'Use where clause before applying an OR'
+            )
+
+        for attribute, value in condition.items():
+            self._conditions.append(
+                self._Condition(
+                    operator='OR',
+                    attrribute=attribute,
+                    value=value,
+                )
+            )
+
+    def _generate_attributes(self):
+        """
+        Will fill self._attributes with self._Attributes for
+        self._table and joined tables.
+        """
+        column_info_sql = 'SELECT COLUMN_NAME ' \
+            'FROM INFORMATION_SCHEMA.COLUMNS ' \
+            'WHERE TABLE_NAME = %s AND TABLE_SCHEMA = DATABASE();'
+
+        all_tables = list(map(lambda jt: jt.ref_table, self._joins)) + [self._table]
+        for table_name in all_tables:
+            with db.connect() as cursor:
+                cursor.execute(
+                    column_info_sql,
+                    (table_name,)
+                )
+                current_table_attrs = cursor.fetchall()
+                for attr in map(lambda x: x[0], current_table_attrs):
+                    self._attrs.append(
+                        self._Attribute(
+                            table=table_name,
+                            value=attr,
+                        )
+                    )
+
+    def _generate_select(self):
+        """
+        Handle generation of sql for select expression.
+
+        :return: sql_str, (args,)
+        """
+        base = 'SELECT {columns} FROM {table} {joins} {conditions}'
+
+    def generate(self):
+        """
+        This should take the object state, and convert it
+        into a functioning sql statement, along with its arguments.
+
+        This will hand back the sql statement, along with
+        the args for it in a tuple.
+
+        :return: sql_str, (args,)
+        """
+
+    def execute(self):
+        """
+        This method should generate the sql, run it,
+        then hand back the result.
+        """
 
 
 class BaseModel:
@@ -29,6 +312,9 @@ class BaseModel:
     __table__ = None
     __schemata__ = 'TS'
     __columns__ = None
+    __foreign_tables__ = None
+
+
 
     def __init__(self, *args):
         """
@@ -51,6 +337,14 @@ class BaseModel:
 
         for key, val in zip(self.__columns__, args):
             self.__setattr__(key, val)
+
+
+    def __getattribute__(self, key):
+        """
+        I want this to lazy load out foreign attributes.
+        """
+        if key in __dir__:
+            return __dir__[key]
 
 
 class Photo(BaseModel):

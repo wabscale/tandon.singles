@@ -2,6 +2,8 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, timedelta, timezone
 from werkzeug import secure_filename
 from dataclasses import dataclass
+from scanf import scanf
+import string
 import os
 
 from .app import db, app
@@ -295,9 +297,42 @@ class SQL:
         return self
 
     def _add_condition(self, clause, *specified_conditions, **conditions):
+        """
+        conditions will be resolved, while specified_conditions will not
+
+        specfied_conditions will need to be of the form:
+            '<table>.<column>=<value>'
+            'Person.username=john'
+
+        conditions will need to be of the form:
+            <column>=<value>
+            username=value
+
+        :param clause: 'AND' or 'OR'
+        :param specified_conditions: for when you want to be specific about conditions
+        :param conditions: conditions that will be resolved
+        """
         if self._type != 'SELECT' or self._table is None or self._conditions is not None:
             raise self.ExpressionError(
                 'Expression Type error'
+            )
+
+        for condition in specified_conditions:
+            table, attribute, value = scanf('%s.%s=%s', condition)
+
+            if all(c in string.digits for c in value):
+                value = int(value)
+
+            if value in ('True', 'False'):
+                value = 1 if value == 'True' else 0
+                
+            self._conditions.append(
+                self._Condition(
+                    operator=clause,
+                    attribute=attribute,
+                    attribute_table=table,
+                    value=value,
+                )
             )
 
         for attribute, value in conditions.items():
@@ -478,6 +513,7 @@ class SQL:
         for model in models:
             if model.__table__ == table_name:
                 return model
+        return TempModel
 
     def gen(self):
         """
@@ -509,6 +545,11 @@ class SQL:
 
         ** If the expression type is a SELECT, the
         return value will be cursor.fetchall()
+
+        *** If you select * out of a table, this will
+        give you a list of initialized models. If the model
+        has not been defined already, it will create a temporary
+        model for you.
         """
         self.gen()
         with db.connect() as cursor:
@@ -516,13 +557,28 @@ class SQL:
                 *self._sql
             )
             if self._type == 'SELECT' and self._columns == ['*']:
-                TableModel = self._resolve_model(self._table.name)
-                if TableModel is not None:
-                    return [
-                        TableModel(*args)
-                        for args in cursor.fetchall()
-                    ]
+                Model = self._resolve_model(self._table.name)
+                return [
+                    Model(*args)
+                    for args in cursor.fetchall()
+                ] if Model is not TempModel else [
+                    Model(self._table.name, *args)
+                    for args in cursor.fetchall()
+                ]
+
             return cursor.fetchall() if self._type == 'SELECT' else None
+
+    def __iter__(self):
+        """
+        Purely convenience.
+
+        With this you can iterate through SELECT results
+        """
+        if self._type != 'SELECT':
+            raise self.ExpressionError(
+                'Iteration not possible'
+            )
+        yield from self.execute()
 
 
 class BaseModel:
@@ -551,12 +607,14 @@ class BaseModel:
         for key, val in zip(self.__columns__, args):
             self.__setattr__(key, val)
 
-    # def __getattribute__(self, key):
-    #     """
-    #     I want this to lazy load out foreign attributes.
-    #     """
-    #     if key in self.__dir__:
-    #         return self.__dir__[key]
+
+class TempModel(BaseModel):
+    """
+    A temporary model
+    """
+    def __init__(self, table_name, *args):
+        self.__table__ = table_name
+        super(TempModel, self).__init__(*args)
 
 
 class Photo(BaseModel):
@@ -681,5 +739,5 @@ class User:
         return User(username)
 
 
-# print(SQL.SELECT('*').FROM('Photo').execute())
+print(*SQL.SELECT('*').FROM('Person'))
 # print(e.INSERT(username='d',password='pwrod').INTO('Person').execute())

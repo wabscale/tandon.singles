@@ -2,6 +2,8 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, timedelta, timezone
 from werkzeug import secure_filename
 from dataclasses import dataclass
+from scanf import scanf
+import string
 import os
 
 from .app import db, app
@@ -213,6 +215,8 @@ class SQL:
         in order starting with self._table, then iterate
         through self._joins.
         """
+        if attr_name == '*':
+            return self._table.name
         for column in self._table.columns:
             if column == attr_name:
                 return self._table.name
@@ -249,7 +253,7 @@ class SQL:
         self._table = self._Table(table)
         return self
 
-    def JOIN(self, table):
+    def JOIN(self, *tables):
         """
 
         """
@@ -259,12 +263,63 @@ class SQL:
             )
         if self._joins is None:
             self._joins = list()
+        for table in tables:
             self._joins.append(
                 self._JoinedTable(self._table, self._joins, table)
             )
         return self
 
-    def WHERE(self, **condition):
+    def _add_condition(self, clause, *specified_conditions, **conditions):
+        """
+        conditions will be resolved, while specified_conditions will not
+
+        specfied_conditions will need to be of the form:
+            '<table>.<column>=<value>'
+            'Person.username=john'
+
+        conditions will need to be of the form:
+            <column>=<value>
+            username=value
+
+        :param clause: 'AND' or 'OR'
+        :param specified_conditions: for when you want to be specific about conditions
+        :param conditions: conditions that will be resolved
+        """
+        if self._type != 'SELECT' or self._table is None or self._conditions is not None:
+            raise self.ExpressionError(
+                'Expression Type error'
+            )
+
+        for condition in specified_conditions:
+            table, attribute, value = scanf('%s.%s=%s', condition)
+
+            if all(c in string.digits for c in value):
+                value = int(value)
+
+            if value in ('True', 'False'):
+                value = 1 if value == 'True' else 0
+
+            self._conditions.append(
+                self._Condition(
+                    operator=clause,
+                    attribute=attribute,
+                    attribute_table=table,
+                    value=value,
+                )
+            )
+
+        for attribute, value in conditions.items():
+            attribute_table = self._resolve_attribute(attribute)
+            self._conditions.append(
+                self._Condition(
+                    operator=clause,
+                    attribute=attribute,
+                    attribute_table=attribute_table,
+                    value=value,
+                )
+            )
+
+    def WHERE(self, *specified_conditions, **conditions):
         """
         Errors will be raised if the type of this expression is not
         SELECT, or if a table has not been specified.
@@ -278,61 +333,24 @@ class SQL:
             )
 
         self._conditions = list()
-
-        for attribute, value in condition.items():
-            attribute_table = self._resolve_attribute(attribute)
-            self._conditions.append(
-                self._Condition(
-                    operator='AND',
-                    attribute=attribute,
-                    attribute_table=attribute_table,
-                    value=value,
-                )
-            )
-
+        self._add_condition('AND', *specified_conditions, **conditions)
         self._conditions[0].operator = 'WHERE'
         return self
 
-    def AND(self, **condition):
-        if self._type != 'SELECT' or self._table is None:
-            raise self.ExpressionError()
-
+    def AND(self, *specified_conditions, **conditions):
         if len(self._conditions) == 0:
             raise self.ExpressionError(
                 'Use where clause before applying an AND'
             )
-
-        for attribute, value in condition.items():
-            attribute_table = self._resolve_attribute(attribute)
-            self._conditions.append(
-                self._Condition(
-                    operator='AND',
-                    attribute=attribute,
-                    attribute_table=attribute_table,
-                    value=value,
-                )
-            )
+        self._add_condition('AND', *specified_conditions, **conditions)
         return self
 
-    def OR(self, **conditions):
-        if self._type != 'SELECT' or self._table is None:
-            raise self.ExpressionError()
-
+    def OR(self, *specified_conditions, **conditions):
         if len(self._conditions) == 0:
             raise self.ExpressionError(
                 'Use where clause before applying an OR'
             )
-
-        for attribute, value in conditions.items():
-            attribute_table = self._resolve_attribute(attribute)
-            self._conditions.append(
-                self._Condition(
-                    operator='OR',
-                    attribute=attribute,
-                    attribute_table=attribute_table,
-                    value=value,
-                )
-            )
+        self._add_condition('AND', *specified_conditions, **conditions)
         return self
 
     def _generate_attributes(self):
@@ -395,6 +413,12 @@ class SQL:
             for joined_table in self._joins
         ) if self._joins is not None else ''
 
+    def _generate_select_columns(self):
+        return ', '.join('`{column_table}`.`{column_name}`'.format(
+            column_table=self._resolve_attribute(column_name),
+            column_name=column_name
+        ) for column_name in self._columns) if self._columns != ['*'] else '*'
+
     def _generate_select(self):
         """
         Handle generation of sql for select expression.
@@ -409,10 +433,7 @@ class SQL:
         base = 'SELECT {columns} FROM {table}{joins}{conditions};'
 
         table = '`{table}`'.format(table=self._table)
-        columns = ', '.join('`{column_table}`.`{column_name}`'.format(
-            column_table=self._resolve_attribute(column_name),
-            column_name=column_name
-        ) for column_name in self._columns)
+        columns = self._generate_select_columns()
         conditions, args = self._generate_conditions()
         joins = self._generate_joins()
 
@@ -432,7 +453,7 @@ class SQL:
                 'Expression state incomplete'
             )
 
-        table=self._table
+        table = self._table
         columns = ', '.join('`{column_name}`'.format(
             column_name=column_name
         ) for column_name in self._insert_values.keys())
@@ -451,6 +472,21 @@ class SQL:
             value if type(value) != bool else int(value)
             for value in self._insert_values.values()
         )
+
+    @staticmethod
+    def _resolve_model(table_name):
+        """
+        Resolve the name of the table as a
+        string to a BaseModel (else None).
+
+        :param table_name: name of table to be resolved
+        :return: subclass of BaseModel or None
+        """
+        models = BaseModel.__subclasses__()
+        for model in models:
+            if model.__table__ == table_name:
+                return model
+        return TempModel
 
     def gen(self):
         """
@@ -482,12 +518,27 @@ class SQL:
 
         ** If the expression type is a SELECT, the
         return value will be cursor.fetchall()
+
+        *** If you select * out of a table, this will
+        give you a list of initialized models. If the model
+        has not been defined already, it will create a temporary
+        model for you.
         """
         self.gen()
         with db.connect() as cursor:
             cursor.execute(
                 *self._sql
             )
+            if self._type == 'SELECT' and self._columns == ['*']:
+                Model = self._resolve_model(self._table.name)
+                return [
+                    Model(*args)
+                    for args in cursor.fetchall()
+                ] if Model is not TempModel else [
+                    Model(self._table.name, *args)
+                    for args in cursor.fetchall()
+                ]
+
             return cursor.fetchall() if self._type == 'SELECT' else None
 
     @staticmethod
@@ -522,6 +573,18 @@ class SQL:
         e._type = 'SELECT'
         e._columns = None
 
+    def __iter__(self):
+        """
+        Purely convenience.
+
+        With this you can iterate through SELECT results
+        """
+        if self._type != 'SELECT':
+            raise self.ExpressionError(
+                'Iteration not possible'
+            )
+        yield from self.execute()
+
 
 class BaseModel:
     """
@@ -544,17 +607,19 @@ class BaseModel:
                 raise NotImplementedError('__table__ not implemented')
 
             self.__columns__ = SQL._Table(self.__table__).columns
-            self.__columns__ = list(map(lambda x: x[0], __columns__))
+            self.__columns__ = list(map(lambda x: x[0], self.__columns__))
 
         for key, val in zip(self.__columns__, args):
             self.__setattr__(key, val)
 
-    def __getattribute__(self, key):
-        """
-        I want this to lazy load out foreign attributes.
-        """
-        if key in self.__dir__:
-            return self.__dir__[key]
+
+class TempModel(BaseModel):
+    """
+    A temporary model
+    """
+    def __init__(self, table_name, *args):
+        self.__table__ = table_name
+        super(TempModel, self).__init__(*args)
 
 
 class Photo(BaseModel):
@@ -577,7 +642,7 @@ class Photo(BaseModel):
         SQL.INSERT(
             allFollowers=all_followers,
             photoOwner=owner.username,
-            timestamp=str(set_now()),
+            timestamp=str(est_now()),
             filePath=file_path,
             caption=caption,
         ).INTO('Photo').execute()
@@ -674,11 +739,10 @@ class User:
         :param str password:
         :return User: new User object
         """
-        password=generate_password_hash(password)
+        password = generate_password_hash(password)
         SQL.INSERT(username=username, password=password).INTO('Person').execute()
         return User(username)
 
 
-# e = SQL()
-# print(e.SELECT('username').FROM('Person').JOIN('Photo').WHERE(photoOwner='abc').gen())
+print(*SQL.SELECT('*').FROM('Person'))
 # print(e.INSERT(username='d',password='pwrod').INTO('Person').execute())

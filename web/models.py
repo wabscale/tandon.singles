@@ -31,10 +31,15 @@ class SQL:
     _where: list of conditions to be applied
     _attrs: names of accessable attributes (foreign and local)
 
-    __verbose__: bool
+    __verbose__ : bool
+    __cache__   : dict
     """
 
     __verbose__ = True
+
+    __cache__ = {
+        'tables': {}
+    }
 
     class ExpressionError(Exception):
         """
@@ -68,7 +73,12 @@ class SQL:
 
         def __init__(self, name):
             self.name = name
-            self.columns = self._get_columns()
+
+            if name not in SQL.__cache__['tables']:
+                self.columns = self._get_columns()
+                SQL.__cache__['tables'][name] = self
+            else:
+                self.columns = SQL.__cache__['tables'][name].columns
 
         def _get_columns(self):
             """
@@ -190,21 +200,8 @@ class SQL:
         __enter__ called in with statement. The intended behavior is that you
         make your expression in the with, then use as to set it to a variable,
         and it will execute the expression, and set the result to the variable.
-
-        eg:
-
-        with Expression().select('*')._from('Users') as users:
-            print(users)
-
-        (
-            id,
-            username,
-            password
-        ),
-        ...
-
         """
-        return self.execute()
+        return self
 
     def __del__(self, *_):
         pass
@@ -224,16 +221,6 @@ class SQL:
                 if column == attr_name:
                     return joined_table.name
 
-    @staticmethod
-    def INSERT(**values):
-        """
-        First method that should be called in INSERT expression.
-        """
-        e=SQL()
-        e._type = 'INSERT'
-        e._insert_values = values
-        return e
-
     def INTO(self, table):
         """
         Sets table for INSERT expression.
@@ -250,20 +237,6 @@ class SQL:
 
         self._table = table
         return self
-
-    @staticmethod
-    def SELECT(*columns):
-        """
-        All this does is set the type for the expression
-        to SELECT and the columns being selected.
-
-        This will throw and error if an expression type has already
-        been specified.
-        """
-        e=SQL()
-        e._type = 'SELECT'
-        e._columns = columns
-        return e
 
     def FROM(self, table):
         """
@@ -516,6 +489,38 @@ class SQL:
                 *self._sql
             )
             return cursor.fetchall() if self._type == 'SELECT' else None
+
+    @staticmethod
+    def INSERT(**values):
+        """
+        First method that should be called in INSERT expression.
+        """
+        e=SQL()
+        e._type = 'INSERT'
+        e._insert_values = values
+        return e
+
+    @staticmethod
+    def SELECT(*columns):
+        """
+        All this does is set the type for the expression
+        to SELECT and the columns being selected.
+
+        This will throw and error if an expression type has already
+        been specified.
+        """
+        e=SQL()
+        e._type = 'SELECT'
+        e._columns = columns
+        return e
+
+    @staticmethod
+    def SELECTFROM(table):
+        """
+        """
+        e=SQL()
+        e._type = 'SELECT'
+        e._columns = None
 
 
 class BaseModel:

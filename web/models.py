@@ -3,15 +3,29 @@ from datetime import datetime, timedelta, timezone
 from werkzeug import secure_filename
 from dataclasses import dataclass
 from scanf import scanf
+
+import tempfile
+import hashlib
+import imghdr
 import string
+import time
 import os
 
 from .app import db, app
 
 
+def strptime(datestr):
+    """
+    Loads datetime from string for object
+    """
+    return datetime.strptime(datestr, '%Y-%m-%d %H:%M:%S')
+
 def est_now():
     """
     Get EST now datetime object.
+
+    .strftime('%Y-%m-%d %H:%M:%S')
+
     :return:
     """
     return datetime.now(tz=timezone(offset=timedelta(hours=-5)))
@@ -33,10 +47,16 @@ class SQL:
     _where: list of conditions to be applied
     _attrs: names of accessable attributes (foreign and local)
 
-    __verbose__: bool
+    __verbose_generation__ : bool
+    __cache__   : dict
     """
 
-    __verbose__ = True
+    __verbose_generation__ = True
+    __verbose_execution__ = True
+
+    __cache__ = {
+        'tables': {}
+    }
 
     class ExpressionError(Exception):
         """
@@ -65,12 +85,29 @@ class SQL:
         name: str
 
     class _Table:
-        column_info_sql = 'SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS ' \
+        column_info_sql = 'SELECT COLUMN_NAME, DATA_TYPE, COLUMN_KEY FROM INFORMATION_SCHEMA.COLUMNS ' \
             'WHERE TABLE_NAME = %s AND TABLE_SCHEMA = DATABASE();'
+
+        @dataclass
+        class _Column:
+            name: str
+            data_type: str
+            primary_key: bool
+
+            def __str__(self):
+                return name
+
+            def __repr__(self):
+                return name
 
         def __init__(self, name):
             self.name = name
-            self.columns = self._get_columns()
+
+            if name not in SQL.__cache__['tables']:
+                self.columns = self._get_columns()
+                SQL.__cache__['tables'][name] = self
+            else:
+                self.columns = SQL.__cache__['tables'][name].columns
 
         def _get_columns(self):
             """
@@ -81,10 +118,10 @@ class SQL:
                     self.column_info_sql,
                     (self.name,)
                 )
-                return list(map(
-                    lambda col: col[0],
-                    cursor.fetchall()
-                ))
+                return [
+                    self._Column(*r)
+                    for r in cursor.fetchall()
+                ]
 
         def __str__(self):
             """
@@ -178,6 +215,7 @@ class SQL:
         self._table         = None
         self._sql           = None
         self._attrs         = None
+        self._result        = None
 
         # SELECT
         self._columns       = None
@@ -187,26 +225,33 @@ class SQL:
         # INSERT
         self._insert_values = None
 
+    def __iter__(self):
+        """
+        Purely convenience.
+
+        With this you can iterate through SELECT results
+        """
+        if self._type != 'SELECT':
+            raise self.ExpressionError(
+                'Iteration not possible'
+            )
+        yield from self.execute()
+
+    def __len__(self):
+        """
+        Length of results
+        """
+        if self._result is None:
+            self.execute()
+        return len(self._result)
+
     def __enter__(self):
         """
         __enter__ called in with statement. The intended behavior is that you
         make your expression in the with, then use as to set it to a variable,
         and it will execute the expression, and set the result to the variable.
-
-        eg:
-
-        with Expression().select('*')._from('Users') as users:
-            print(users)
-
-        (
-            id,
-            username,
-            password
-        ),
-        ...
-
         """
-        return self.execute()
+        return self
 
     def __del__(self, *_):
         pass
@@ -221,80 +266,16 @@ class SQL:
         if attr_name == '*':
             return self._table.name
         for column in self._table.columns:
-            if column == attr_name:
+            if column.name == attr_name:
                 return self._table.name
-        for joined_table in self._joins:
-            for column in joined_table.columns:
-                if column == attr_name:
-                    return joined_table.name
-
-    @staticmethod
-    def INSERT(**values):
-        """
-        First method that should be called in INSERT expression.
-        """
-        e = SQL()
-        e._type = 'INSERT'
-        e._insert_values = values
-        return e
-
-    def INTO(self, table):
-        """
-        Sets table for INSERT expression.
-        """
-        if self._type != 'INSERT':
-            raise self.ExpressionError(
-                'Expression Type error'
-            )
-
-        if self._table is not None:
-            raise self.ExpressionError(
-                'Table already set for INSERT expression'
-            )
-
-        self._table = table
-        return self
-
-    @staticmethod
-    def SELECT(*columns):
-        """
-        All this does is set the type for the expression
-        to SELECT and the columns being selected.
-
-        This will throw and error if an expression type has already
-        been specified.
-        """
-        e = SQL()
-        e._type = 'SELECT'
-        e._columns = list(c for c in columns)
-        return e
-
-    def FROM(self, table):
-        """
-
-        """
-        if self._type != 'SELECT' or self._table is not None:
-            raise self.ExpressionError(
-                'Expression Type error'
-            )
-        self._table = self._Table(table)
-        return self
-
-    def JOIN(self, *tables):
-        """
-
-        """
-        if self._type != 'SELECT' or self._table is None:
-            raise self.ExpressionError(
-                'Expression Type error'
-            )
-        if self._joins is None:
-            self._joins = list()
-        for table in tables:
-            self._joins.append(
-                self._JoinedTable(self._table, self._joins, table)
-            )
-        return self
+        if self._joins is not None:
+            for joined_table in self._joins:
+                for column in joined_table.columns:
+                    if column == attr_name:
+                        return joined_table.name
+        raise self.ExpressionError(
+            'Unable to resolve column name {}'.format(attr_name)
+        )
 
     def _add_condition(self, clause, *specified_conditions, **conditions):
         """
@@ -312,7 +293,10 @@ class SQL:
         :param specified_conditions: for when you want to be specific about conditions
         :param conditions: conditions that will be resolved
         """
-        if self._type != 'SELECT' or self._table is None or self._conditions is not None:
+        if self._conditions is None:
+            self._conditions = []
+
+        if self._type != 'SELECT' or self._table is None:
             raise self.ExpressionError(
                 'Expression Type error'
             )
@@ -345,40 +329,6 @@ class SQL:
                     value=value,
                 )
             )
-
-    def WHERE(self, *specified_conditions, **conditions):
-        """
-        Errors will be raised if the type of this expression is not
-        SELECT, or if a table has not been specified.
-
-        If more than one condition is specified, it will by default
-        apply AND logic between the conditions.
-        """
-        if self._type != 'SELECT' or self._table is None or self._conditions is not None:
-            raise self.ExpressionError(
-                'Expression Type error'
-            )
-
-        self._conditions = list()
-        self._add_condition('AND', *specified_conditions, **conditions)
-        self._conditions[0].operator = 'WHERE'
-        return self
-
-    def AND(self, *specified_conditions, **conditions):
-        if len(self._conditions) == 0:
-            raise self.ExpressionError(
-                'Use where clause before applying an AND'
-            )
-        self._add_condition('AND', *specified_conditions, **conditions)
-        return self
-
-    def OR(self, *specified_conditions, **conditions):
-        if len(self._conditions) == 0:
-            raise self.ExpressionError(
-                'Use where clause before applying an OR'
-            )
-        self._add_condition('AND', *specified_conditions, **conditions)
-        return self
 
     def _generate_attributes(self):
         """
@@ -418,8 +368,7 @@ class SQL:
         """
         return (' ' + ' '.join(
             '{operator} `{table}`.`{attr}` = {placeholder}'.format(
-                placeholder='%s' if type(value) == str else
-                '%i' if type(value) in (int,bool,) else '',
+                placeholder='%s',
                 operator=operator,
                 table=table,
                 attr=attr,
@@ -485,8 +434,7 @@ class SQL:
             column_name=column_name
         ) for column_name in self._insert_values.keys())
         values = ', '.join(
-            '%s' if type(value) == str else '%i' if type (value) in (int,bool,) else ''
-            for value in self._insert_values.values()
+            '%s' * len(list(self._insert_values.values()))
         )
 
         sql = 'INSERT INTO `{table}` ({columns}) VALUES ({values});'.format(
@@ -530,11 +478,11 @@ class SQL:
                 if self._type == 'SELECT' else \
                    self._generate_insert() \
                    if self._type == 'INSERT' else ''
-            if self.__verbose__:
-                print(self._sql)
+            if self.__verbose_generation__:
+                print('Generated:', self._sql)
         return self._sql
 
-    def execute(self):
+    def execute(self, use_cache=True):
         """
         This method should generate the sql, run it,
         then hand back the result (if expression type
@@ -552,33 +500,138 @@ class SQL:
         model for you.
         """
         self.gen()
-        with db.connect() as cursor:
-            cursor.execute(
-                *self._sql
-            )
-            if self._type == 'SELECT' and self._columns == ['*']:
-                Model = self._resolve_model(self._table.name)
-                return [
-                    Model(*args)
-                    for args in cursor.fetchall()
-                ] if Model is not TempModel else [
-                    Model(self._table.name, *args)
-                    for args in cursor.fetchall()
-                ]
+        if self._result is None or not use_cache:
+            if self.__verbose_execution__:
+                print('Executing:', self._sql)
+            with db.connect() as cursor:
+                sql, args = self._sql
+                cursor.execute(sql, args)
+            if self._type == 'SELECT':
+                if self._columns == ['*']: # smart select
+                    Model = self._resolve_model(self._table.name)
+                    self._result = [
+                        Model(*args)
+                        for args in cursor.fetchall()
+                    ] if Model is not TempModel else [
+                        Model(self._table.name, *args)
+                        for args in cursor.fetchall()
+                    ]
+                else: # dumb select
+                    self._result = cursor.fetchall()
+            else: # insert
+                self._result = True
+        return self._result
 
-            return cursor.fetchall() if self._type == 'SELECT' else None
-
-    def __iter__(self):
+    def WHERE(self, *specified_conditions, **conditions):
         """
-        Purely convenience.
+        Errors will be raised if the type of this expression is not
+        SELECT, or if a table has not been specified.
 
-        With this you can iterate through SELECT results
+        If more than one condition is specified, it will by default
+        apply AND logic between the conditions.
         """
-        if self._type != 'SELECT':
+        if self._type != 'SELECT' or self._table is None or self._conditions is not None:
             raise self.ExpressionError(
-                'Iteration not possible'
+                'Expression Type error'
             )
-        yield from self.execute()
+
+        self._conditions = list()
+        self._add_condition('AND', *specified_conditions, **conditions)
+        self._conditions[0].operator = 'WHERE'
+        return self
+
+    def INTO(self, table):
+        """
+        Sets table for INSERT expression.
+        """
+        if self._type != 'INSERT':
+            raise self.ExpressionError(
+                'Expression Type error'
+            )
+
+        if self._table is not None:
+            raise self.ExpressionError(
+                'Table already set for INSERT expression'
+            )
+
+        self._table = table
+        return self
+
+    def FROM(self, table):
+        """
+        Adds table to select from to expression state
+        """
+        if self._type != 'SELECT' or self._table is not None:
+            raise self.ExpressionError(
+                'Expression Type error'
+            )
+        self._table = self._Table(table)
+        return self
+
+    def JOIN(self, *tables):
+        """
+        Adds joins to expression state for tables.
+        """
+        if self._type != 'SELECT' or self._table is None:
+            raise self.ExpressionError(
+                'Expression Type error'
+            )
+        if self._joins is None:
+            self._joins = list()
+        for table in tables:
+            self._joins.append(
+                self._JoinedTable(self._table, self._joins, table)
+            )
+        return self
+
+    def AND(self, *specified_conditions, **conditions):
+        if len(self._conditions) == 0:
+            raise self.ExpressionError(
+                'Use where clause before applying an AND'
+            )
+        self._add_condition('AND', *specified_conditions, **conditions)
+        return self
+
+    def OR(self, *specified_conditions, **conditions):
+        if len(self._conditions) == 0:
+            raise self.ExpressionError(
+                'Use where clause before applying an OR'
+            )
+        self._add_condition('AND', *specified_conditions, **conditions)
+        return self
+
+    @staticmethod
+    def INSERT(**values):
+        """
+        First method that should be called in INSERT expression.
+        """
+        e=SQL()
+        e._type = 'INSERT'
+        e._insert_values = values
+        return e
+
+    @staticmethod
+    def SELECT(*columns):
+        """
+        All this does is set the type for the expression
+        to SELECT and the columns being selected.
+
+        This will throw and error if an expression type has already
+        been specified.
+        """
+        e=SQL()
+        e._type = 'SELECT'
+        e._columns = [ c for c in columns ]
+        return e
+
+    @staticmethod
+    def SELECTFROM(table):
+        """
+        """
+        e=SQL()
+        e._type = 'SELECT'
+        e._columns = ['*']
+        return e.FROM(table)
 
 
 class BaseModel:
@@ -602,10 +655,13 @@ class BaseModel:
                 raise NotImplementedError('__table__ not implemented')
 
             self.__columns__ = SQL._Table(self.__table__).columns
-            self.__columns__ = list(map(lambda x: x[0], self.__columns__))
 
-        for key, val in zip(self.__columns__, args):
-            self.__setattr__(key, val)
+        for col, val in zip(self.__columns__, args):
+            if col.data_type == 'timestamp' and type(val) == str:
+                val = strptime(val)
+            elif col.data_type in ('int','tinyint'):
+                val = int(val)
+            self.__setattr__(col.name, val)
 
 
 class TempModel(BaseModel):
@@ -615,7 +671,6 @@ class TempModel(BaseModel):
     def __init__(self, table_name, *args):
         self.__table__ = table_name
         super(TempModel, self).__init__(*args)
-
 
 class Photo(BaseModel):
     __table__ = 'Photo'
@@ -629,11 +684,35 @@ class Photo(BaseModel):
         :param all_followers:
         :return: new photo object
         """
-        file_path=os.path.join(
-            app.config['UPLOAD_FOLDER'],
-            secure_filename(image.data.filename)
+
+        filestream = image.data.stream
+        with tempfile.NamedTemporaryFile() as f:
+            f.write(filestream.read())
+            filestream.seek(0)
+            ext = imghdr.what(f.name)
+
+        if ext not in ('png', 'jpeg', 'gif'):
+            # handle invalid file
+            return ext
+
+        sha256 = lambda s: hashlib.sha256(s.encode()).hexdigest()
+
+        filename = '{}.{}'.format(sha256('{}{}{}{}'.format(
+            str(time.time()), caption, owner, os.urandom(0x10)
+        )), ext)
+
+        filedir = os.path.join(
+            app.config['UPLOAD_DIR'],
+            sha256(owner),
         )
-        image.data.save()
+
+        os.makedirs(filedir, exist_ok=True)
+
+        image.data.save(os.path.join(
+            filedir,
+            filename
+        ))
+
         SQL.INSERT(
             allFollowers=all_followers,
             photoOwner=owner.username,
@@ -654,8 +733,7 @@ class Photo(BaseModel):
         ]
         """
         return [
-            Photo(*photo)
-            for photo in SQL.SELECT('*').FROM('Photos').WHERE(owner=username).execute()
+            SQL.SELECTFROM('Photos').WHERE(owner=username)
         ]
 
     @staticmethod
@@ -670,23 +748,20 @@ class Photo(BaseModel):
         """
         return [
             # photos that are in close friend groups that username is in
-            Photo(*photo)
-            for photo in SQL.SELECT('*').From('Photos').JOIN('Share').JOIN('CloseFriendGroup').JOIN('Belong').WHERE(
-                    username=username
-            ).execute()
+            SQL.SELECT.From('Photos').JOIN('Share', 'CloseFriendGroup', 'Belong').WHERE(
+                username=username
+            )
         ] + [
             # subscibed photos
-            Photo(*photo)
-            for photo in SQL.SELECT('*').FROM('Photos').JOIN('Follow').WHERE(
-                    followeeUsername=username,
-                    acceptedfollow=True
-            ).execute()
+            SQL.SELECTFROM('Photos').JOIN('Follow').WHERE(
+                followeeUsername=username,
+                acceptedfollow=True
+            )
         ] + [
             # users photos
-            Photo(*photo)
-            for photo in SQL.SELECT('*').FROM('Photos').JOIN('Person').WHERE(
-                    username=username
-            ).execute()
+            SQL.SELECTFROM('Photos').JOIN('Person').WHERE(
+                username=username
+            )
         ]
 
 
@@ -697,9 +772,9 @@ class User:
     """
     def __init__(self, username):
         self.username, self.password = (None,)*2
-        res = SQL.SELECT('username', 'password').FROM('Person').WHERE(username=username).execute()
+        res = SQL.SELECT('username', 'password').FROM('Person').WHERE(username=username)
         if len(res) == 1:
-            self.username, self.password = res[0]
+            self.username, self.password = res
 
     def check_password(self, pword):
         return check_password_hash(self.password, pword) if self.username is not None else False
@@ -739,5 +814,5 @@ class User:
         return User(username)
 
 
-print(*SQL.SELECT('*').FROM('Person'))
+# print(*SQL.SELECTFROM('Photo').WHERE(photoID=1))
 # print(e.INSERT(username='d',password='pwrod').INTO('Person').execute())

@@ -5,17 +5,19 @@ import pymysql
 from .forms import PostForm
 
 from ..app import app
-from ..models import User
+from ..models import User, Photo
 
 home = Blueprint('home', __name__, url_prefix='/')
 
 
-@home.route('/')
+@home.route('/', methods=['GET', 'POST'])
 @login_required
 def index():
     form = PostForm()
     if form.validate_on_submit():
-        pass  # handle post
+        ext = Photo.create(form.image, current_user.username, form.caption.data, form.public.data)
+        if ext is not None:
+            flash('{} is not a valid image type ;('.format(ext))
     return render_template(
         'home/index.html',
         form=form

@@ -325,7 +325,7 @@ class SQL:
 
             if value in ('True', 'False'):
                 value = 1 if value == 'True' else 0
-                
+
             self._conditions.append(
                 self._Condition(
                     operator=clause,

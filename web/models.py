@@ -52,7 +52,7 @@ class SQL:
     """
 
     __verbose_generation__ = True
-    __verbose_execution__ = True
+    __verbose_execution__ = False
 
     __cache__ = {
         'tables': {}
@@ -94,11 +94,14 @@ class SQL:
             data_type: str
             primary_key: bool
 
-            def __str__(self):
-                return name
+            def __init__(self, name, date_type, primary_key):
+                self.name, self.data_type, self.primary_key = name, date_type, True if primary_key == 'PRI' else False
 
-            def __repr__(self):
-                return name
+            def __str__(self):
+                return self.name
+
+            # def __repr__(self):
+            #     return self.name
 
         def __init__(self, name):
             self.name = name
@@ -148,7 +151,6 @@ class SQL:
         class JoinError(Exception):
             pass
 
-
         ref_info_sql = 'SELECT COLUMN_NAME, REFERENCED_COLUMN_NAME ' \
             'FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE ' \
             'WHERE TABLE_NAME = %s AND REFERENCED_TABLE_NAME = %s AND TABLE_SCHEMA = DATABASE();'
@@ -159,7 +161,6 @@ class SQL:
             self.joins = joins
             self.join_attr = None
             self.sql = None
-
 
         def _gen(self):
             """
@@ -211,19 +212,22 @@ class SQL:
         """
         Only needs to null out all the state attributes.
         """
-        self._type          = None
-        self._table         = None
-        self._sql           = None
-        self._attrs         = None
-        self._result        = None
+        self._type           = None
+        self._table          = None
+        self._sql            = None
+        self._attrs          = None
+        self._result         = None
 
         # SELECT
-        self._columns       = None
-        self._joins         = None
-        self._conditions    = None
+        self._columns        = None
+        self._joins          = None
+        self._conditions     = None
 
         # INSERT
-        self._insert_values = None
+        self._insert_values  = None
+
+        # UPDATE
+        self._updates_values = None
 
     def __iter__(self):
         """
@@ -296,7 +300,7 @@ class SQL:
         if self._conditions is None:
             self._conditions = []
 
-        if self._type != 'SELECT' or self._table is None:
+        if self._type not in ('SELECT', 'UPDATE') or self._table is None:
             raise self.ExpressionError(
                 'Expression Type error'
             )
@@ -448,6 +452,40 @@ class SQL:
             for value in self._insert_values.values()
         )
 
+    def _generate_set_values(self):
+        """
+        generates the condition
+        :return:
+        """
+        return ', '.join(
+            '`{column}` = %s'.format(
+                column=column
+            )
+            for column in self._updates_values.keys()
+        ), list(self._updates_values.values())
+
+    def _generate_update(self):
+        """
+        generates sql statement for UPDATE expression
+        :return:
+        """
+        if self._type != 'UPDATE' or self._table is None or self._updates_values is None:
+            raise self.ExpressionError(
+                'Expression state incomplete'
+            )
+
+        table = self._table
+        values, args1 = self._generate_set_values()
+        conditions, args2 = self._generate_conditions()
+
+        base = 'UPDATE `{table}` SET {values}{conditions};'
+
+        return base.format(
+            table=table,
+            values=values,
+            conditions=conditions
+        ), args1 + args2
+
     @staticmethod
     def _resolve_model(table_name):
         """
@@ -477,7 +515,10 @@ class SQL:
             self._sql = self._generate_select() \
                 if self._type == 'SELECT' else \
                    self._generate_insert() \
-                   if self._type == 'INSERT' else ''
+                   if self._type == 'INSERT' else \
+                       self._generate_update() \
+                           if self._type == 'UPDATE' else ''
+
             if self.__verbose_generation__:
                 print('Generated:', self._sql)
         return self._sql
@@ -507,18 +548,28 @@ class SQL:
                 sql, args = self._sql
                 cursor.execute(sql, args)
             if self._type == 'SELECT':
-                if self._columns == ['*']: # smart select
-                    Model = self._resolve_model(self._table.name)
-                    self._result = [
-                        Model(*args)
-                        for args in cursor.fetchall()
-                    ] if Model is not TempModel else [
-                        Model(self._table.name, *args)
-                        for args in cursor.fetchall()
-                    ]
-                else: # dumb select
-                    self._result = cursor.fetchall()
-            else: # insert
+                Model = self._resolve_model(self._table.name)
+
+                model_init_kwargs = [
+                    {
+                        col: val
+                        for col, val in zip(self._columns, item)
+                    }
+                    for item in cursor.fetchall()
+                ]
+
+                if None in model_init_kwargs[0].values():
+                    return []
+
+                self._result = [
+                    Model(**kwargs)
+                    for kwargs in model_init_kwargs
+                ] if Model is not TempModel else [
+                    Model(self._table.name, **kwargs)
+                    for kwargs in model_init_kwargs
+                ]
+
+            else:  # insert or update
                 self._result = True
         return self._result
 
@@ -530,7 +581,7 @@ class SQL:
         If more than one condition is specified, it will by default
         apply AND logic between the conditions.
         """
-        if self._type != 'SELECT' or self._table is None or self._conditions is not None:
+        if self._type not in ('SELECT', 'UPDATE') or self._table is None or self._conditions is not None:
             raise self.ExpressionError(
                 'Expression Type error'
             )
@@ -600,12 +651,32 @@ class SQL:
         self._add_condition('AND', *specified_conditions, **conditions)
         return self
 
+    def SET(self, **kwargs):
+        if self._type not in ('SELECT', 'UPDATE'):
+            raise self.ExpressionError(
+                'Invalid Expression Type'
+            )
+        self._updates_values = kwargs
+        return self
+
+    @staticmethod
+    def UPDATE(table):
+        """
+
+        :param table:
+        :return:
+        """
+        e = SQL()
+        e._type = 'UPDATE'
+        e._table = SQL._Table(table)
+        return e
+
     @staticmethod
     def INSERT(**values):
         """
         First method that should be called in INSERT expression.
         """
-        e=SQL()
+        e = SQL()
         e._type = 'INSERT'
         e._insert_values = values
         return e
@@ -619,7 +690,7 @@ class SQL:
         This will throw and error if an expression type has already
         been specified.
         """
-        e=SQL()
+        e = SQL()
         e._type = 'SELECT'
         e._columns = [ c for c in columns ]
         return e
@@ -628,10 +699,7 @@ class SQL:
     def SELECTFROM(table):
         """
         """
-        e=SQL()
-        e._type = 'SELECT'
-        e._columns = ['*']
-        return e.FROM(table)
+        return SQL.SELECT('*').FROM(table)
 
 
 class BaseModel:
@@ -642,35 +710,62 @@ class BaseModel:
     """
     __table__ = None
     __columns__ = None
-    __foreign_tables__ = None
 
-    def __init__(self, *args):
+    def __init__(self, *args, **kwargs):
         """
         Will fetch names of columns when initially called.
 
         :param list args: list of data members for object in order they were created.
         """
-        if self.__columns__ is None:
-            if self.__table__ is None:
-                raise NotImplementedError('__table__ not implemented')
+        self.__columns__ = SQL._Table(self.__table__).columns
+        self.__column_lot__ = {
+            col.name: col
+            for col in self.__columns__
+        }
 
-            self.__columns__ = SQL._Table(self.__table__).columns
+        self.__primarykeys__ = list(filter(
+            lambda column: column.primary_key,
+            self.__columns__
+        ))
 
-        for col, val in zip(self.__columns__, args):
-            if col.data_type == 'timestamp' and type(val) == str:
-                val = strptime(val)
-            elif col.data_type in ('int','tinyint'):
-                val = int(val)
-            self.__setattr__(col.name, val)
+        self._set_state(**dict(zip(self.__columns__, args)))
+        self._set_state(**kwargs)
+
+    def __set_column_value(self, column_name, value):
+        col = self.__column_lot__[column_name]
+        if col.data_type == 'timestamp' and type(value) == str:
+            value = strptime(value)
+        elif col.data_type in ('int', 'tinyint'):
+            value = int(value)
+        self.__setattr__(col.name, value)
+
+    def _set_state(self, **kwargs):
+        for col, val in kwargs.items():
+            self.__set_column_value(col, val)
+
+    def commit(self):
+        """
+        generate and execute sql to update object in db
+        :return:
+        """
+        SQL.UPDATE(self.__table__).SET(**{
+            key: val
+            for key, val in self.__columns__
+        }).WHERE(**{
+            key: val
+            for key, val in self.__columns__
+            if key in self.__primarykeys__
+        })
 
 
 class TempModel(BaseModel):
     """
     A temporary model
     """
-    def __init__(self, table_name, *args):
+    def __init__(self, table_name, *args, **kwargs):
         self.__table__ = table_name
-        super(TempModel, self).__init__(*args)
+        super(TempModel, self).__init__(*args, **kwargs)
+
 
 class Photo(BaseModel):
     __table__ = 'Photo'
@@ -816,5 +911,6 @@ class User:
         return User(username)
 
 
-# print(*SQL.SELECTFROM('Photo').WHERE(photoID=1))
+# print(SQL.UPDATE('Photo').SET(photoID=1).WHERE(photoID=2).gen())
+print(*SQL.SELECT('username').FROM('Person').WHERE(username='j'))
 # print(e.INSERT(username='d',password='pwrod').INTO('Person').execute())

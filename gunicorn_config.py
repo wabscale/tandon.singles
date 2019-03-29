@@ -6,5 +6,5 @@ SITENAME=environ.pop('SITENAME') if 'SITENAME' in environ else 'DEFAULT'
 
 bind='0.0.0.0:{}'.format(PORT)
 workers=int(WORKERS)
-errorlog='web/data/error.log'
+errorlog='web/.data/log/error.log'
 preload_app=True

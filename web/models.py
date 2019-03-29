@@ -706,18 +706,20 @@ class Photo(BaseModel):
             sha256(owner),
         )
 
-        os.makedirs(filedir, exist_ok=True)
-
-        image.data.save(os.path.join(
+        filepath = os.path.join(
             filedir,
             filename
-        ))
+        )
+
+        os.makedirs(filedir, exist_ok=True)
+
+        image.data.save(filepath)
 
         SQL.INSERT(
             allFollowers=all_followers,
             photoOwner=owner.username,
             timestamp=str(est_now()),
-            filePath=file_path,
+            filePath=filepath,
             caption=caption,
         ).INTO('Photo').execute()
 

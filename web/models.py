@@ -710,6 +710,47 @@ class BaseModel:
     """
     __table__ = None
     __columns__ = None
+    __relationships__ = None
+
+    class Relationship:
+        """
+        class BaseModel:
+            __table__ = 'Person'
+            __relationships__ = {
+                'photos': 'Photo'
+            }
+        """
+        def __init__(self, model_obj, foreign_table):
+            self.model_obj = model_obj
+            self.foreign_table = foreign_table
+            self._objs = None
+
+        def __iter__(self):
+            """
+            yeild foreign table object specified my relationship
+            :return:
+            """
+
+            if self._objs is None:
+                primarykeys = {
+                    col.name: self.model_obj.__getattr__(col.name)
+                    for col in self.model_obj.__columns__
+                    if col.primary_key
+                }
+                self._objs = list(SQL.SELECTFROM(
+                    self.foreign_table
+                ).JOIN(self.model_obj.__table__).WHERE(
+                    *[
+                        '{table}.{primarykey}={value}'.format(
+                            table=self.model_obj.__table__,
+                            primarykey=primarykey,
+                            value=value
+                        )
+                        for primarykey, value in primarykeys
+                    ]
+                ))
+
+            yield from self._objs
 
     def __init__(self, *args, **kwargs):
         """
@@ -730,6 +771,32 @@ class BaseModel:
 
         self._set_state(**dict(zip(self.__columns__, args)))
         self._set_state(**kwargs)
+
+        if self.__relationships__ is None:
+            self.__relationships__ = []
+
+    def __getattr__(self, rel_name):
+        """
+        this is where relationships will be lazily resolved.
+        :return:
+        """
+        if rel_name in self.__relationships__ and rel_name not in self.__dict__:
+            self.__dict__[rel_name] = self.Relationship(
+                self,
+                self.__relationships__[rel_name]
+            )
+            return self.__dict__[rel_name]
+        raise AttributeError('{} not found'.format(rel_name))
+
+    def _generate_relationships(self):
+        """
+        :return:
+        """
+        for rel_name, table_name in self.__relationships__.items():
+            self.__setattr__(
+                rel_name,
+                self.Relationship(self, table_name)
+            )
 
     def __set_column_value(self, column_name, value):
         col = self.__column_lot__[column_name]
@@ -912,5 +979,5 @@ class User:
 
 
 # print(SQL.UPDATE('Photo').SET(photoID=1).WHERE(photoID=2).gen())
-print(*SQL.SELECT('username').FROM('Person').WHERE(username='j'))
+# print(*SQL.SELECT('username').FROM('Person').WHERE(username='j'))
 # print(e.INSERT(username='d',password='pwrod').INTO('Person').execute())

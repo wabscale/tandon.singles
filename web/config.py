@@ -13,15 +13,17 @@ class Config:
     MYSQL_DATABASE_HOST = 'db'
     MYSQL_DATABASE_DB = 'TS'
 
-    VERBOSE_SQL_GENERATION = False
+    VERBOSE_SQL_GENERATION = True
 
-    UPLOAD_DIR = 'web/.data/uploads'
-    LOG_DIR = '.data/log'
+    UPLOAD_DIR = os.path.join(os.getcwd(), '.data/uploads')
+    LOG_DIR = os.path.join(os.getcwd(), '.data/log')
+
+    DB_LOG_FILE = os.path.join(os.getcwd(), LOG_DIR, 'db_log.log')
 
     def __init__(self):
         os.makedirs(self.UPLOAD_DIR, exist_ok=True)
         os.makedirs(self.LOG_DIR, exist_ok=True)
-        if any('dev.py' in arg for arg in sys.argv):
+        if all('gunicorn' not in arg for arg in sys.argv):
             self.SECRET_KEY = 'DEBUG'
             self.MYSQL_DATABASE_HOST = '127.0.0.1'
             self.DOMAIN = 'http://localhost:5000'

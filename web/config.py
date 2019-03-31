@@ -13,6 +13,8 @@ class Config:
     MYSQL_DATABASE_HOST = 'db'
     MYSQL_DATABASE_DB = 'TS'
 
+    VERBOSE_SQL_GENERATION = False
+
     UPLOAD_DIR = 'web/.data/uploads'
     LOG_DIR = '.data/log'
 
@@ -21,5 +23,6 @@ class Config:
         os.makedirs(self.LOG_DIR, exist_ok=True)
         if any('dev.py' in arg for arg in sys.argv):
             self.SECRET_KEY = 'DEBUG'
-            self.MYSQL_DATABASE_HOST = 'localhost'
+            self.MYSQL_DATABASE_HOST = '127.0.0.1'
             self.DOMAIN = 'http://localhost:5000'
+            self.VERBOSE_SQL_GENERATION = True

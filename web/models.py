@@ -1,6 +1,5 @@
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, timedelta, timezone
-from werkzeug import secure_filename
 from dataclasses import dataclass
 from scanf import scanf
 
@@ -20,6 +19,7 @@ def strptime(datestr):
     """
     return datetime.strptime(datestr, '%Y-%m-%d %H:%M:%S')
 
+
 def est_now():
     """
     Get EST now datetime object.
@@ -31,11 +31,11 @@ def est_now():
     return datetime.now(tz=timezone(offset=timedelta(hours=-5)))
 
 
-class SQL:
+class Sql:
     """
     _type    : type of expression (select, insert, ...)
     _table   : str
-    _tables  : [ self._Table ]
+    _tables  : [ self.Table ]
     _columns : str
     _joins   : [ str ]
     _where   : [ _Condition ]
@@ -51,7 +51,7 @@ class SQL:
     __cache__   : dict
     """
 
-    __verbose_generation__ = True
+    __verbose_generation__ = app.config['VERBOSE_SQL_GENERATION']
     __verbose_execution__ = False
 
     __cache__ = {
@@ -84,7 +84,7 @@ class SQL:
         table: str
         name: str
 
-    class _Table:
+    class Table:
         column_info_sql = 'SELECT COLUMN_NAME, DATA_TYPE, COLUMN_KEY FROM INFORMATION_SCHEMA.COLUMNS ' \
             'WHERE TABLE_NAME = %s AND TABLE_SCHEMA = DATABASE();'
 
@@ -106,11 +106,11 @@ class SQL:
         def __init__(self, name):
             self.name = name
 
-            if name not in SQL.__cache__['tables']:
+            if name not in Sql.__cache__['tables']:
                 self.columns = self._get_columns()
-                SQL.__cache__['tables'][name] = self
+                Sql.__cache__['tables'][name] = self
             else:
-                self.columns = SQL.__cache__['tables'][name].columns
+                self.columns = Sql.__cache__['tables'][name].columns
 
         def _get_columns(self):
             """
@@ -132,7 +132,7 @@ class SQL:
             """
             return self.name
 
-    class _JoinedTable(_Table):
+    class JoinedTable(Table):
         """
         Provide this object with the name of the current table,
         and the table to join, and it will generate the sql to
@@ -155,12 +155,20 @@ class SQL:
             'FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE ' \
             'WHERE TABLE_NAME = %s AND REFERENCED_TABLE_NAME = %s AND TABLE_SCHEMA = DATABASE();'
 
-        def __init__(self, current_table, joins, ref_table):
+        def __init__(self, current_table, ref_table):
             super(self.__class__, self).__init__(ref_table)
             self.current_table = current_table.name
-            self.joins = joins
             self.join_attr = None
             self.sql = None
+
+        @staticmethod
+        def resolve_attribute(current_table, foreign_table):
+            with db.connect() as cursor:
+                cursor.execute(
+                    Sql.JoinedTable.ref_info_sql,
+                    (current_table, foreign_table,)
+                )
+                return cursor.fetchone()
 
         def _gen(self):
             """
@@ -172,30 +180,15 @@ class SQL:
             """
             if self.sql is not None:
                 return self.sql
-            res = None
 
-            for table_name in [self.name] + self.joins:
-                with db.connect() as cursor:
-                    cursor.execute(
-                        self.ref_info_sql,
-                        (table_name, self.current_table,)
-                    )
-                    res = cursor.fetchone()
-                    if res is not None:
-                        break
+            name, ref_name = self.resolve_attribute(self.current_table, self.name)
 
-            if res is None: # sanity check
-                raise self.JoinError(
-                    'Invalid Join'
-                )
+            self.join_attr = self._JoinAttribute(
+                name=name,
+                ref_name=ref_name
+            )
 
-                ref_name, name = res
-                self.join_attr = self._JoinAttribute(
-                    name=name,
-                    ref_name=ref_name
-                )
-
-            self.sql =  'JOIN {ref_table}'.format(
+            self.sql = 'JOIN {ref_table}'.format(
                 ref_table=self.name
             ) if self.join_attr.is_same() else 'JOIN {ref_table} ON `{table}`.`{name}` = `{ref_table}`.`{ref_name}`'.format(
                 table=self.current_table,
@@ -239,14 +232,17 @@ class SQL:
             raise self.ExpressionError(
                 'Iteration not possible'
             )
-        yield from self.execute()
+        yield from self()
+
+    def __call__(self, *args, **kwargs):
+        return self.all()
 
     def __len__(self):
         """
         Length of results
         """
         if self._result is None:
-            self.execute()
+            self()
         return len(self._result)
 
     def __enter__(self):
@@ -255,12 +251,20 @@ class SQL:
         make your expression in the with, then use as to set it to a variable,
         and it will execute the expression, and set the result to the variable.
         """
-        return self
+        return self.all()
 
     def __del__(self, *_):
         pass
 
-    def _resolve_attribute(self, attr_name):
+    def do(self):
+        """
+        This is a cleaner name for insert queries to call to execute.
+
+        :return: calls self.all()
+        """
+        return self.all()
+
+    def _resolve_attribute(self, attr_name, skip_curr=False):
         """
         This method will take an attribute name, and
         try to find the table it came from. It will search
@@ -269,9 +273,10 @@ class SQL:
         """
         if attr_name == '*':
             return self._table.name
-        for column in self._table.columns:
-            if column.name == attr_name:
-                return self._table.name
+        if not skip_curr:
+            for column in self._table.columns:
+                if column.name == attr_name:
+                    return self._table.name
         if self._joins is not None:
             for joined_table in self._joins:
                 for column in joined_table.columns:
@@ -342,7 +347,10 @@ class SQL:
         column_info_sql = 'SELECT COLUMN_NAME ' \
             'FROM INFORMATION_SCHEMA.COLUMNS ' \
             'WHERE TABLE_NAME = %s AND TABLE_SCHEMA = DATABASE();'
-        joined_tables =  list(map(lambda jt: jt.ref_table, self._joins)) if self._joins is not None else []
+        joined_tables = list(map(
+            lambda jt: jt.ref_table,
+            self._joins
+        )) if self._joins is not None else []
         all_tables = joined_tables + [self._table]
         for table_name in all_tables:
             with db.connect() as cursor:
@@ -438,7 +446,7 @@ class SQL:
             column_name=column_name
         ) for column_name in self._insert_values.keys())
         values = ', '.join(
-            '%s' * len(list(self._insert_values.values()))
+            ['%s'] * len(list(self._insert_values.values()))
         )
 
         sql = 'INSERT INTO `{table}` ({columns}) VALUES ({values});'.format(
@@ -523,7 +531,37 @@ class SQL:
                 print('Generated:', self._sql)
         return self._sql
 
-    def execute(self, use_cache=True):
+    def first(self, use_cache=True):
+        """
+        :return: first element of results
+        """
+        self.gen()
+        if self._result is None or not use_cache:
+            if self.__verbose_execution__:
+                print('Executing:', self._sql)
+            with db.connect() as cursor:
+                sql, args = self._sql
+                cursor.execute(sql, args)
+            if self._type == 'SELECT':
+                Model = self._resolve_model(self._table.name)
+                r = cursor.fetchone()
+
+                if r is None:
+                    self._result = None
+                    return None
+
+                kwargs = {
+                    col.name: val
+                    for col, val in zip(self._table.columns, r)
+                }
+
+                self._result = Model(**kwargs)
+
+            else:  # insert or update
+                self._result = True
+        return self._result
+
+    def all(self, use_cache=True):
         """
         This method should generate the sql, run it,
         then hand back the result (if expression type
@@ -552,13 +590,13 @@ class SQL:
 
                 model_init_kwargs = [
                     {
-                        col: val
-                        for col, val in zip(self._columns, item)
+                        col.name: val
+                        for col, val in zip(self._table.columns, item)
                     }
                     for item in cursor.fetchall()
                 ]
 
-                if None in model_init_kwargs[0].values():
+                if len(model_init_kwargs) == 0:
                     return []
 
                 self._result = [
@@ -616,7 +654,7 @@ class SQL:
             raise self.ExpressionError(
                 'Expression Type error'
             )
-        self._table = self._Table(table)
+        self._table = self.Table(table)
         return self
 
     def JOIN(self, *tables):
@@ -631,7 +669,7 @@ class SQL:
             self._joins = list()
         for table in tables:
             self._joins.append(
-                self._JoinedTable(self._table, self._joins, table)
+                self.JoinedTable(self._table, table)
             )
         return self
 
@@ -666,9 +704,9 @@ class SQL:
         :param table:
         :return:
         """
-        e = SQL()
+        e = Sql()
         e._type = 'UPDATE'
-        e._table = SQL._Table(table)
+        e._table = Sql.Table(table)
         return e
 
     @staticmethod
@@ -676,7 +714,7 @@ class SQL:
         """
         First method that should be called in INSERT expression.
         """
-        e = SQL()
+        e = Sql()
         e._type = 'INSERT'
         e._insert_values = values
         return e
@@ -690,7 +728,7 @@ class SQL:
         This will throw and error if an expression type has already
         been specified.
         """
-        e = SQL()
+        e = Sql()
         e._type = 'SELECT'
         e._columns = [ c for c in columns ]
         return e
@@ -699,7 +737,7 @@ class SQL:
     def SELECTFROM(table):
         """
         """
-        return SQL.SELECT('*').FROM(table)
+        return Sql.SELECT('*').FROM(table)
 
 
 class BaseModel:
@@ -722,7 +760,7 @@ class BaseModel:
         """
         def __init__(self, model_obj, foreign_table):
             self.model_obj = model_obj
-            self.foreign_table = foreign_table
+            self.foreign_table = Sql.Table(foreign_table)
             self._objs = None
 
         def __iter__(self):
@@ -732,23 +770,20 @@ class BaseModel:
             """
 
             if self._objs is None:
-                primarykeys = {
-                    col.name: self.model_obj.__getattr__(col.name)
-                    for col in self.model_obj.__columns__
-                    if col.primary_key
-                }
-                self._objs = list(SQL.SELECTFROM(
-                    self.foreign_table
+                ref, curr = Sql.JoinedTable.resolve_attribute(
+                    self.foreign_table.name,
+                    self.model_obj.__table__
+                )
+
+                self._objs = Sql.SELECTFROM(
+                    self.foreign_table.name
                 ).JOIN(self.model_obj.__table__).WHERE(
-                    *[
-                        '{table}.{primarykey}={value}'.format(
-                            table=self.model_obj.__table__,
-                            primarykey=primarykey,
-                            value=value
-                        )
-                        for primarykey, value in primarykeys
-                    ]
-                ))
+                    '{table}.{primarykey}={value}'.format(
+                        table=self.foreign_table.name,
+                        primarykey=ref,
+                        value=self.model_obj.__getattr__(curr)
+                    )
+                ).all()
 
             yield from self._objs
 
@@ -758,7 +793,7 @@ class BaseModel:
 
         :param list args: list of data members for object in order they were created.
         """
-        self.__columns__ = SQL._Table(self.__table__).columns
+        self.__columns__ = Sql.Table(self.__table__).columns
         self.__column_lot__ = {
             col.name: col
             for col in self.__columns__
@@ -769,24 +804,30 @@ class BaseModel:
             self.__columns__
         ))
 
-        self._set_state(**dict(zip(self.__columns__, args)))
+        # self._set_state(**{
+        #     col.name: eval
+        #     for col, val in zip(self.__columns__, kwargs)
+        # })
+        # print('\n'.join('{} : {}'.format(k, v) for k, v in self.__dict__.items()))
         self._set_state(**kwargs)
 
         if self.__relationships__ is None:
             self.__relationships__ = []
 
-    def __getattr__(self, rel_name):
+    def __getattr__(self, item):
         """
         this is where relationships will be lazily resolved.
         :return:
         """
-        if rel_name in self.__relationships__ and rel_name not in self.__dict__:
-            self.__dict__[rel_name] = self.Relationship(
+        if item in self.__dict__:
+            return self.__dict__[item]
+        if item in self.__relationships__:
+            self.__dict__[item] = self.Relationship(
                 self,
-                self.__relationships__[rel_name]
+                self.__relationships__[item]
             )
-            return self.__dict__[rel_name]
-        raise AttributeError('{} not found'.format(rel_name))
+            return self.__dict__[item]
+        raise AttributeError('{} not found'.format(item))
 
     def _generate_relationships(self):
         """
@@ -800,10 +841,11 @@ class BaseModel:
 
     def __set_column_value(self, column_name, value):
         col = self.__column_lot__[column_name]
-        if col.data_type == 'timestamp' and type(value) == str:
-            value = strptime(value)
-        elif col.data_type in ('int', 'tinyint'):
-            value = int(value)
+        if value is not None:
+            if col.data_type == 'timestamp' and type(value) == str:
+                value = strptime(value)
+            elif col.data_type in ('int', 'tinyint'):
+                value = int(value)
         self.__setattr__(col.name, value)
 
     def _set_state(self, **kwargs):
@@ -815,7 +857,7 @@ class BaseModel:
         generate and execute sql to update object in db
         :return:
         """
-        SQL.UPDATE(self.__table__).SET(**{
+        Sql.UPDATE(self.__table__).SET(**{
             key: val
             for key, val in self.__columns__
         }).WHERE(**{
@@ -825,6 +867,25 @@ class BaseModel:
         })
 
 
+class Query(object):
+    def __init__(self, table):
+        if isinstance(table, str):
+            self.table_name = table
+        try:
+            self.table_name = table.__table__
+        except AttributeError as e:
+            raise Exception('Invalid query arguments {}'.format(e))
+
+    def find(self, **conditions):
+        """
+        similar to sqlalchemy's Sql.filter_by function
+
+        :param conditions: list of conditions to find objects
+        :return: Sql object
+        """
+        return Sql.SELECTFROM(self.table_name).WHERE(**conditions)
+
+
 class TempModel(BaseModel):
     """
     A temporary model
@@ -832,6 +893,13 @@ class TempModel(BaseModel):
     def __init__(self, table_name, *args, **kwargs):
         self.__table__ = table_name
         super(TempModel, self).__init__(*args, **kwargs)
+
+
+class Person(BaseModel):
+    __table__ = 'Person'
+    __relationships__ = {
+        'photos': 'Photo'
+    }
 
 
 class Photo(BaseModel):
@@ -877,16 +945,16 @@ class Photo(BaseModel):
 
         image.data.save(filepath)
 
-        SQL.INSERT(
+        Sql.INSERT(
             allFollowers=all_followers,
             photoOwner=owner.username,
             timestamp=str(est_now()),
             filePath=filepath,
             caption=caption,
-        ).INTO('Photo').execute()
+        ).INTO('Photo')()
 
     @staticmethod
-    def ownded_by(username):
+    def owned_by(username):
         """
         Generates list of Photo object owner by username
 
@@ -897,7 +965,7 @@ class Photo(BaseModel):
         ]
         """
         return [
-            SQL.SELECTFROM('Photos').WHERE(owner=username)
+            Sql.SELECTFROM('Photos').WHERE(owner=username)
         ]
 
     @staticmethod
@@ -910,23 +978,23 @@ class Photo(BaseModel):
 
         :return: [ Photo ]
         """
-        return [
+        return sorted(list(
             # photos that are in close friend groups that username is in
-            SQL.SELECT.From('Photos').JOIN('Share', 'CloseFriendGroup', 'Belong').WHERE(
+            Sql.SELECTFROM('Photos').JOIN('Share', 'CloseFriendGroup', 'Belong').WHERE(
                 username=username
             )
-        ] + [
+        ) + list(
             # subscibed photos
-            SQL.SELECTFROM('Photos').JOIN('Follow').WHERE(
+            Sql.SELECTFROM('Photos').JOIN('Follow').WHERE(
                 followeeUsername=username,
                 acceptedfollow=True
             )
-        ] + [
+        ) + list(
             # users photos
-            SQL.SELECTFROM('Photos').JOIN('Person').WHERE(
+            Sql.SELECTFROM('Photos').JOIN('Person').WHERE(
                 username=username
             )
-        ]
+        ), key=lambda photo: photo.timestamp)
 
 
 class User:
@@ -936,9 +1004,9 @@ class User:
     """
     def __init__(self, username):
         self.username, self.password = (None,)*2
-        res = SQL.SELECT('username', 'password').FROM('Person').WHERE(username=username)
-        if len(res) == 1:
-            self.username, self.password = res
+        self.person = Query(Person).find(username=username).first()
+        if self.person is not None:
+            self.username, self.password = self.person.username, self.person.password
 
     def check_password(self, pword):
         return check_password_hash(self.password, pword) if self.username is not None else False
@@ -974,10 +1042,18 @@ class User:
         :return User: new User object
         """
         password = generate_password_hash(password)
-        SQL.INSERT(username=username, password=password).INTO('Person').execute()
+        print(password)
+        Sql.INSERT(username=username, password=password).INTO('Person').do()
         return User(username)
 
 
-# print(SQL.UPDATE('Photo').SET(photoID=1).WHERE(photoID=2).gen())
-# print(*SQL.SELECT('username').FROM('Person').WHERE(username='j'))
+# print(app.config['MYSQL_DATABASE_HOST'])
+# User.create('admin', 'password')
+# p = Query(Person).find(username='admin').first()
+# print(list(p.photos))
+# print(User('admin'))
+# p = Sql.SELECTFROM('Person').WHERE(username='admin').execute()[0]
+# print(p.photos)
+# print(Sql.UPDATE('Photo').SET(photoID=1).WHERE(photoID=2).gen())
+# print(*Sql.SELECT('username').FROM('Person').WHERE(username='j'))
 # print(e.INSERT(username='d',password='pwrod').INTO('Person').execute())

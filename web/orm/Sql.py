@@ -1,9 +1,9 @@
 from dataclasses import dataclass
 from scanf import scanf
 import string
+from . import BaseModel
 
-from ..app import db, app
-from .BaseModel import BaseModel, TempModel
+from ..app import db, app, logging
 
 
 class Table:
@@ -477,11 +477,11 @@ class Sql:
         :param table_name: name of table to be resolved
         :return: subclass of BaseModel or None
         """
-        models = BaseModel.__subclasses__()
+        models = BaseModel.BaseModel.__subclasses__()
         for model in models:
             if model.__table__ == table_name:
                 return model
-        return TempModel
+        return BaseModel.TempModel
 
     def gen(self):
         """
@@ -502,7 +502,7 @@ class Sql:
                            if self._type == 'UPDATE' else ''
 
             if self.__verbose_generation__:
-                print('Generated:', self._sql)
+                logging.warning('Generated: {}'.format(self._sql))
         return self._sql
 
     def first(self, use_cache=True):
@@ -512,7 +512,7 @@ class Sql:
         self.gen()
         if self._result is None or not use_cache:
             if self.__verbose_execution__:
-                print('Executing:', self._sql)
+                logging.warning('Executing:', self._sql)
             with db.connect() as cursor:
                 sql, args = self._sql
                 cursor.execute(sql, args)
@@ -555,7 +555,7 @@ class Sql:
         self.gen()
         if self._result is None or not use_cache:
             if self.__verbose_execution__:
-                print('Executing:', self._sql)
+                logging.warning('Executing:', self._sql)
             with db.connect() as cursor:
                 sql, args = self._sql
                 cursor.execute(sql, args)
@@ -576,7 +576,7 @@ class Sql:
                 self._result = [
                     Model(**kwargs)
                     for kwargs in model_init_kwargs
-                ] if Model is not TempModel else [
+                ] if Model is not BaseModel.TempModel else [
                     Model(self._table.name, **kwargs)
                     for kwargs in model_init_kwargs
                 ]

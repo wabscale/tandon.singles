@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta, timezone
+from random import randint
 
 
 class utils:
@@ -19,3 +20,7 @@ class utils:
         :return:
         """
         return datetime.now(tz=timezone(offset=timedelta(hours=-5)))
+
+    @staticmethod
+    def gen_randint():
+        return randint(0, 0xffffffffffffffff)

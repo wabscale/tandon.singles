@@ -1,4 +1,4 @@
-import web.orm.Sql
+from . import Sql
 from .utils import utils
 
 
@@ -23,7 +23,7 @@ class BaseModel:
 
         def __init__(self, model_obj, foreign_table):
             self.model_obj = model_obj
-            self.foreign_table = web.orm.Sql.Table(foreign_table)
+            self.foreign_table = Sql.Table(foreign_table)
             self._objs = None
 
         def __iter__(self):
@@ -33,12 +33,12 @@ class BaseModel:
             """
 
             if self._objs is None:
-                ref, curr = web.orm.Sql.JoinedTable.resolve_attribute(
+                ref, curr = Sql.Sql.JoinedTable.resolve_attribute(
                     self.foreign_table.name,
                     self.model_obj.__table__
                 )
 
-                self._objs = web.orm.Sql.Sql.SELECTFROM(
+                self._objs = Sql.Sql.SELECTFROM(
                     self.foreign_table.name
                 ).JOIN(self.model_obj.__table__).WHERE(
                     '{table}.{primarykey}={value}'.format(
@@ -56,7 +56,7 @@ class BaseModel:
 
         :param list args: list of data members for object in order they were created.
         """
-        self.__columns__ = web.orm.Sql.Table(self.__table__).columns
+        self.__columns__ = Sql.Table(self.__table__).columns
         self.__column_lot__ = {
             col.name: col
             for col in self.__columns__
@@ -135,14 +135,14 @@ class BaseModel:
 
         :return:
         """
-        web.orm.Sql.Sql.UPDATE(self.__table__).SET(**{
+        Sql.Sql.UPDATE(self.__table__).SET(**{
             key: val
             for key, val in self.__columns__
         }).WHERE(**{
             key: val
             for key, val in self.__columns__
             if key in self.__primarykeys__
-        })
+        }).do()
 
 
 class TempModel(BaseModel):

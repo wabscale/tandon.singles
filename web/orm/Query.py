@@ -1,4 +1,4 @@
-import web.orm.Sql
+from . import Sql
 
 
 class Query(object):
@@ -12,7 +12,7 @@ class Query(object):
         :param conditions: list of conditions to find objects
         :return: Sql object
         """
-        return web.orm.Sql.Sql.SELECTFROM(self.table.__table__).WHERE(**conditions)
+        return Sql.Sql.SELECTFROM(self.table.__table__).WHERE(**conditions)
 
     def new(self, **values):
         """
@@ -21,5 +21,5 @@ class Query(object):
         :param values: key value dict for obj
         :return: new instance of table model
         """
-        web.orm.Sql.Sql.INSERT(**values).INTO(self.table.__table__).do()
+        Sql.Sql.INSERT(**values).INTO(self.table.__table__).do()
         return self.table(**values)

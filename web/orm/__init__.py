@@ -1,7 +1,8 @@
-from .Sql import Sql, Table, JoinedTable
-from .BaseModel import BaseModel, TempModel
-from .Query import Query
-from .utils import utils
+from web.orm.Sql import Sql, Table, JoinedTable
+from web.orm.BaseModel import BaseModel, TempModel
+from web.orm.Query import Query
+from web.orm.utils import utils
+
 
 if __name__ == "__main__":
-    print(Query())
+    print(Sql.SELECTFROM('Person').WHERE(username='admin').do())

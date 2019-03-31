@@ -1,5 +1,5 @@
 from . import Sql
-from .utils import utils
+from . import utils
 
 
 class BaseModel:
@@ -115,7 +115,7 @@ class BaseModel:
         col = self.__column_lot__[column_name]
         if value is not None:
             if col.data_type == 'timestamp' and type(value) == str:
-                value = utils.strptime(value)
+                value = utils.utils.strptime(value)
             elif col.data_type in ('int', 'tinyint'):
                 value = int(value)
         self.__setattr__(col.name, value)

@@ -20,11 +20,6 @@ CSRFProtect(app)
 db = MySQL(app)
 
 if app.config['VERBOSE_SQL_GENERATION']:
-    print(os.path.join(
-        os.getcwd(),
-        app.config['LOG_DIR'],
-        'orm_log.log'
-    ))
     logging.basicConfig(filename=os.path.join(
         app.config['LOG_DIR'],
         'orm_log.log'

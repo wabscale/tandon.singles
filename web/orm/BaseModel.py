@@ -50,7 +50,7 @@ class BaseModel:
 
             yield from self._objs
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, **kwargs):
         """
         Will fetch names of columns when initially called.
 
@@ -58,20 +58,15 @@ class BaseModel:
         """
         self.__columns__ = Sql.Table(self.__table__).columns
         self.__column_lot__ = {
-            col.name: col
+            col.column_name: col
             for col in self.__columns__
         }
 
-        self.__primarykeys__ = list(filter(
+        self.primary_keys = list(filter(
             lambda column: column.primary_key,
             self.__columns__
         ))
 
-        # self._set_state(**{
-        #     col.name: eval
-        #     for col, val in zip(self.__columns__, kwargs)
-        # })
-        # print('\n'.join('{} : {}'.format(k, v) for k, v in self.__dict__.items()))
         self._set_state(**kwargs)
 
         if self.__relationships__ is None:
@@ -81,7 +76,10 @@ class BaseModel:
         return '<{}Model: {}>'.format(
             self.__table__,
             '{{\n{}\n}}'.format(',\n'.join(
-                '    {:12}: {}'.format(col.name, str(self.__dict__[col.name]))
+                '    {:12}: {}'.format(
+                    col.column_name,
+                    str(self.__dict__[col.column_name])
+                )
                 for col in self.__columns__
             ))
         )
@@ -118,11 +116,11 @@ class BaseModel:
                 value = utils.utils.strptime(value)
             elif col.data_type in ('int', 'tinyint'):
                 value = int(value)
-        self.__setattr__(col.name, value)
+        self.__setattr__(col.column_name, value)
 
     def _set_state(self, **kwargs):
         for col in self.__columns__:
-            self.__set_column_value(col.name, None)
+            self.__set_column_value(col.column_name, None)
         for col, val in kwargs.items():
             self.__set_column_value(col, val)
 
@@ -141,7 +139,7 @@ class BaseModel:
         }).WHERE(**{
             key: val
             for key, val in self.__columns__
-            if key in self.__primarykeys__
+            if key in self.primary_keys
         }).do()
 
 

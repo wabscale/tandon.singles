@@ -1,8 +1,8 @@
 from dataclasses import dataclass
 from scanf import scanf
 import string
-from . import BaseModel
 
+from . import BaseModel
 from ..app import db, app, logging
 
 
@@ -12,24 +12,29 @@ class Table:
 
     @dataclass
     class _Column:
-        name: str
+        column_name: str
         data_type: str
         primary_key: bool
 
-        def __init__(self, name, date_type, primary_key):
-            self.name, self.data_type, self.primary_key = name, date_type, True if primary_key == 'PRI' else False
+        def __init__(self, table_name, column_name, date_type, primary_key):
+            self.table_name, self.column_name, self.data_type, self.primary_key = table_name, column_name, date_type, True if primary_key == 'PRI' else False
 
         def __str__(self):
-            return self.name
+            return '`{}`.`{}`'.format(self.table_name, self.column_name)
 
     def __init__(self, name):
         self.name = name
 
         if name not in Sql.__cache__['tables']:
             self.columns = self._get_columns()
+            self.primary_keys = list(filter(
+                lambda column: column.primary_key,
+                self.columns
+            ))
             Sql.__cache__['tables'][name] = self
         else:
             self.columns = Sql.__cache__['tables'][name].columns
+            self.primary_keys = Sql.__cache__['tables'][name].primary_keys
 
     def _get_columns(self):
         """
@@ -41,7 +46,7 @@ class Table:
                 (self.name,)
             )
             return [
-                self._Column(*r)
+                self._Column(self.name, *r)
                 for r in cursor.fetchall()
             ]
 
@@ -236,7 +241,7 @@ class Sql:
 
         :return: calls self.all()
         """
-        return self.all()
+        return self.first()
 
     def _resolve_attribute(self, attr_name, skip_curr=False):
         """
@@ -249,12 +254,12 @@ class Sql:
             return self._table.name
         if not skip_curr:
             for column in self._table.columns:
-                if column.name == attr_name:
+                if column.column_name == attr_name:
                     return self._table.name
         if self._joins is not None:
             for joined_table in self._joins:
                 for column in joined_table.columns:
-                    if column == attr_name:
+                    if column.column_name == attr_name:
                         return joined_table.name
         raise self.ExpressionError(
             'Unable to resolve column name {}'.format(attr_name)
@@ -352,7 +357,7 @@ class Sql:
         ->
         "WHERE id = %i", (1,)
         """
-        return (' ' + ' '.join(
+        return ('\n' + '\n'.join(
             '{operator} `{table}`.`{attr}` = {placeholder}'.format(
                 placeholder='%s',
                 operator=operator,
@@ -363,14 +368,14 @@ class Sql:
         ), [
             value if type(value) != bool else int(value)
             for _, _, value, _ in self._conditions
-        ]) if self._conditions is not None else ('',[])
+        ]) if self._conditions is not None else ('', [])
 
     def _generate_joins(self):
         """
         This method will hand back the sql for the
         joins in the expression.
         """
-        return ' ' + ' '.join(
+        return '\n' + '\n'.join(
             str(joined_table)
             for joined_table in self._joins
         ) if self._joins is not None else ''
@@ -392,7 +397,7 @@ class Sql:
                 'Expression state incomplete'
             )
 
-        base = 'SELECT {columns} FROM {table}{joins}{conditions};'
+        base = 'SELECT {columns}\nFROM {table}{joins}{conditions};'
 
         table = '`{table}`'.format(table=self._table)
         columns = self._generate_select_columns()
@@ -423,13 +428,13 @@ class Sql:
             ['%s'] * len(list(self._insert_values.values()))
         )
 
-        sql = 'INSERT INTO `{table}` ({columns}) VALUES ({values});'.format(
+        insert_sql = 'INSERT INTO `{table}`\n({columns})\nVALUES ({values});'.format(
             columns=columns,
             values=values,
             table=table,
         )
 
-        return sql, list(
+        return insert_sql, list(
             value if type(value) != bool else int(value)
             for value in self._insert_values.values()
         )
@@ -468,6 +473,26 @@ class Sql:
             conditions=conditions
         ), args1 + args2
 
+    def _generate_insert_select(self):
+        """
+        after we run an insert, we would like to get that new row,
+        and turn it into a model. Here we will need to determine if
+        primary keys were inserted, or generated then create a select
+        statement to get that new row out.
+
+        :return: sql str
+        """
+
+        if all(pkey.column_name in self._insert_values for pkey in self._table.primary_keys):
+            sql, args = Sql.SELECTFROM(self._table.name).WHERE(**self._insert_values).gen()
+        else:
+            sql, args = Sql.SELECTFROM(self._table.name).gen()
+            sql = sql[:-1]  # cut off ;
+            sql += '\nWHERE {} = LAST_INSERT_ID();'.format(
+                str(self._table.primary_keys[0])
+            )
+        return sql, args
+
     @staticmethod
     def _resolve_model(table_name):
         """
@@ -505,35 +530,29 @@ class Sql:
                 logging.warning('Generated: {}'.format(self._sql))
         return self._sql
 
+    def _generate_models(self, **results):
+        Model = self._resolve_model(self._table.name)
+        model_init_kwargs = [
+            {
+                col.column_name: val
+                for col, val in zip(self._table.columns, item)
+            }
+            for item in results
+        ]
+        self._result = [
+            Model(**kwargs)
+            for kwargs in model_init_kwargs
+        ] if Model is not BaseModel.TempModel else [
+            Model(self._table.name, **kwargs)
+            for kwargs in model_init_kwargs
+        ]
+        return self._result
+
     def first(self, use_cache=True):
         """
         :return: first element of results
         """
-        self.gen()
-        if self._result is None or not use_cache:
-            if self.__verbose_execution__:
-                logging.warning('Executing:', self._sql)
-            with db.connect() as cursor:
-                sql, args = self._sql
-                cursor.execute(sql, args)
-            if self._type == 'SELECT':
-                Model = self._resolve_model(self._table.name)
-                r = cursor.fetchone()
-
-                if r is None:
-                    self._result = None
-                    return None
-
-                kwargs = {
-                    col.name: val
-                    for col, val in zip(self._table.columns, r)
-                }
-
-                self._result = Model(**kwargs)
-
-            else:  # insert or update
-                self._result = True
-        return self._result
+        return self.all(use_cache)[0]
 
     def all(self, use_cache=True):
         """
@@ -554,35 +573,41 @@ class Sql:
         """
         self.gen()
         if self._result is None or not use_cache:
+
             if self.__verbose_execution__:
                 logging.warning('Executing:', self._sql)
+
             with db.connect() as cursor:
-                sql, args = self._sql
-                cursor.execute(sql, args)
-            if self._type == 'SELECT':
-                Model = self._resolve_model(self._table.name)
+                cursor.execute(*self._sql)
+                if self._type in ('SELECT', 'INSERT'):
+                    Model = self._resolve_model(self._table.name)
 
-                model_init_kwargs = [
-                    {
-                        col.name: val
-                        for col, val in zip(self._table.columns, item)
-                    }
-                    for item in cursor.fetchall()
-                ]
+                    if self._type == 'INSERT':
+                        cursor.fetchall()
+                        cursor.execute(*self._generate_insert_select())
 
-                if len(model_init_kwargs) == 0:
-                    return []
+                    raw_results = cursor.fetchall()
 
-                self._result = [
-                    Model(**kwargs)
-                    for kwargs in model_init_kwargs
-                ] if Model is not BaseModel.TempModel else [
-                    Model(self._table.name, **kwargs)
-                    for kwargs in model_init_kwargs
-                ]
+                    model_init_kwargs = [
+                        {
+                            col.column_name: val
+                            for col, val in zip(self._table.columns, item)
+                        }
+                        for item in raw_results
+                    ]
 
-            else:  # insert or update
-                self._result = True
+                    if len(model_init_kwargs) == 0:
+                        return []
+
+                    self._result = [
+                        Model(**kwargs)
+                        for kwargs in model_init_kwargs
+                    ] if Model is not BaseModel.TempModel else [
+                        Model(self._table.name, **kwargs)
+                        for kwargs in model_init_kwargs
+                    ]
+                else:  # insert or update
+                    self._result = True
         return self._result
 
     def WHERE(self, *specified_conditions, **conditions):
@@ -617,7 +642,7 @@ class Sql:
                 'Table already set for INSERT expression'
             )
 
-        self._table = table
+        self._table = Table(table)
         return self
 
     def FROM(self, table):

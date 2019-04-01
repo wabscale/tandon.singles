@@ -2,8 +2,8 @@ from . import Sql
 
 
 class Query(object):
-    def __init__(self, table):
-        self.table = table
+    def __init__(self, table_name):
+        self.table_name = table_name if isinstance(table_name, str) else table_name.__table__
 
     def find(self, **conditions):
         """
@@ -12,7 +12,7 @@ class Query(object):
         :param conditions: list of conditions to find objects
         :return: Sql object
         """
-        return Sql.Sql.SELECTFROM(self.table.__table__).WHERE(**conditions)
+        return Sql.SELECTFROM(self.table_name).WHERE(**conditions)
 
     def new(self, **values):
         """
@@ -21,5 +21,4 @@ class Query(object):
         :param values: key value dict for obj
         :return: new instance of table model
         """
-        Sql.Sql.INSERT(**values).INTO(self.table.__table__).do()
-        return self.table(**values)
+        return Sql.INSERT(**values).INTO(self.table_name).do()

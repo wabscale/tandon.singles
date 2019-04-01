@@ -96,9 +96,11 @@ class JoinedTable(Table):
     class JoinError(Exception):
         pass
 
-    ref_info_sql='SELECT COLUMN_NAME, REFERENCED_COLUMN_NAME ' \
-        'FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE ' \
-        'WHERE TABLE_NAME=%s AND REFERENCED_TABLE_NAME=%s AND TABLE_SCHEMA=DATABASE();'
+    ref_info_sql='SELECT COLUMN_NAME, REFERENCED_COLUMN_NAME '\
+                 'FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE '\
+                 'WHERE TABLE_NAME=%s '\
+                 'AND REFERENCED_TABLE_NAME=%s '\
+                 'AND TABLE_SCHEMA=DATABASE();'
 
     def __init__(self, current_table, ref_table):
         super(self.__class__, self).__init__(ref_table)
@@ -209,6 +211,7 @@ class Sql:
         self._sql           =None
         self._attrs         =None
         self._result        =None
+        self._raw_append_values=None
 
         # SELECT
         self._columns       =None
@@ -317,7 +320,7 @@ class Sql:
         if self._conditions is None:
             self._conditions=[]
 
-        if self._type not in ('SELECT', 'UPDATE') or self._table is None:
+        if self._type not in ('SELECT', 'UPDATE', 'DELETE') or self._table is None:
             raise self.ExpressionError(
                 'Expression Type error'
             )
@@ -356,9 +359,10 @@ class Sql:
         Will fill self._attributes with self._Attributes for
         self._table and joined tables.
         """
-        column_info_sql='SELECT COLUMN_NAME ' \
-            'FROM INFORMATION_SCHEMA.COLUMNS ' \
-            'WHERE TABLE_NAME=%s AND TABLE_SCHEMA=DATABASE();'
+        column_info_sql='SELECT COLUMN_NAME '\
+                        'FROM INFORMATION_SCHEMA.COLUMNS ' \
+                        'WHERE TABLE_NAME=%s ' \
+                        'AND TABLE_SCHEMA=DATABASE();'
         joined_tables=list(map(
             lambda jt: jt.ref_table,
             self._joins
@@ -430,7 +434,7 @@ class Sql:
                 'Expression state incomplete'
             )
 
-        base='SELECT {columns}\nFROM {table}{joins}{conditions};'
+        base='SELECT {columns}\nFROM {table}{joins}{conditions}'
 
         table='`{table}`'.format(table=self._table)
         columns=self._generate_select_columns()
@@ -461,7 +465,7 @@ class Sql:
             ['%s'] * len(list(self._insert_values.values()))
         )
 
-        insert_sql='INSERT INTO `{table}`\n({columns})\nVALUES ({values});'.format(
+        insert_sql='INSERT INTO `{table}`\n({columns})\nVALUES ({values})'.format(
             columns=columns,
             values=values,
             table=table,
@@ -498,7 +502,7 @@ class Sql:
         values, args1=self._generate_set_values()
         conditions, args2=self._generate_conditions()
 
-        base='UPDATE `{table}` SET {values}{conditions};'
+        base='UPDATE `{table}` SET {values}{conditions}'
 
         return base.format(
             table=table,
@@ -520,13 +524,27 @@ class Sql:
             sql, args=Sql.SELECTFROM(self._table.name).WHERE(**self._insert_values).gen()
         else:
             sql, args=Sql.SELECTFROM(self._table.name).gen()
-            sql=sql[:-1]  # cut off ;
-            sql += '\nWHERE {}=LAST_INSERT_ID();'.format(
+            sql=sql[:-1]  # cut off
+            sql += '\nWHERE {}=LAST_INSERT_ID()'.format(
                 str(self._table.primary_keys[0])
             )
         if self.__verbose_execution__:
-            logging.info('Generated: {}'.format((sql, args,)))
+            logging.warning('Generated: {}'.format((sql, args,)))
         return sql, args
+
+    def _generate_delete(self):
+        """
+        generate sql for delete statement
+        :return:
+        """
+        table=self._table.name
+        conditions, args=self._generate_conditions()
+        base='DELETE FROM {table}{conditions}'
+
+        return base.format(
+            table=table,
+            conditions=conditions
+        ), args
 
     @staticmethod
     def _resolve_model(table_name):
@@ -543,6 +561,22 @@ class Sql:
                 return model
         return BaseModel.TempModel
 
+    @property
+    def extra_raw(self):
+        """
+
+        :return:
+        """
+        if self._raw_append_values is None:
+            self._raw_append_values=[]
+        return '\n'.join(map(
+            lambda x: x[0],
+            self._raw_append_values
+        )), list(map(
+            lambda x: x[1],
+            self._raw_append_values
+        ))
+
     def gen(self):
         """
         This should take the object state, and convert it
@@ -554,15 +588,20 @@ class Sql:
         :return: sql_str, (args,)
         """
         if self._sql is None:
-            self._sql=self._generate_select() \
-                if self._type == 'SELECT' else \
-                   self._generate_insert() \
-                   if self._type == 'INSERT' else \
-                       self._generate_update() \
-                           if self._type == 'UPDATE' else ''
+            raw_extra_sql, raw_extra_args=self.extra_raw
+            sql, args={
+                'SELECT': self._generate_select,
+                'INSERT': self._generate_insert,
+                'UPDATE': self._generate_update,
+                'DELETE': self._generate_delete,
+            }[self._type]()
+            self._sql = (
+                sql + raw_extra_sql + ';',
+                args + raw_extra_args,
+            )
 
             if self.__verbose_generation__:
-                logging.info('Generated: {}'.format(self._sql))
+                logging.warning('Generated: {}'.format(self._sql))
         return self._sql
 
     def _generate_models(self, **results):
@@ -611,7 +650,7 @@ class Sql:
         if self._result is None or not use_cache:
 
             if self.__verbose_execution__:
-                logging.info('Executing:', self._sql)
+                logging.warning('Executing:', self._sql)
 
             with db.connect() as cursor:
                 cursor.execute(*self._sql)
@@ -642,9 +681,25 @@ class Sql:
                         Model(self._table.name, **kwargs)
                         for kwargs in model_init_kwargs
                     ]
-                else:  # insert or update
+                else:  # update
                     self._result=[None]
         return self._result
+
+    def append_raw(self, sql, args=None):
+        """
+        You can add any raw sql, along with its args here
+
+        :param sql:
+        :param args:
+        :return:
+        """
+        if self._raw_append_values is None:
+            self._raw_append_values=[]
+        if args is None:
+            args=[]
+        self._raw_append_values.append([
+            sql, args
+        ])
 
     def WHERE(self, *specified_conditions, **conditions):
         """
@@ -654,7 +709,7 @@ class Sql:
         If more than one condition is specified, it will by default
         apply AND logic between the conditions.
         """
-        if self._type not in ('SELECT', 'UPDATE') or self._table is None or self._conditions is not None:
+        if self._type not in ('SELECT', 'UPDATE', 'DELETE') or self._table is None or self._conditions is not None:
             raise self.ExpressionError(
                 'Expression Type error'
             )
@@ -685,7 +740,7 @@ class Sql:
         """
         Adds table to select from to expression state
         """
-        if self._type != 'SELECT' or self._table is not None:
+        if self._type not in ('SELECT',) or self._table is not None:
             raise self.ExpressionError(
                 'Expression Type error'
             )
@@ -696,7 +751,7 @@ class Sql:
         """
         Adds joins to expression state for tables.
         """
-        if self._type != 'SELECT' or self._table is None:
+        if self._type not in ('SELECT',) or self._table is None:
             raise self.ExpressionError(
                 'Expression Type error'
             )
@@ -731,6 +786,13 @@ class Sql:
             )
         self._updates_values=kwargs
         return self
+
+    @staticmethod
+    def DELETE(table):
+        e=Sql()
+        e._type='DELETE'
+        e._table=Table(table)
+        return e
 
     @staticmethod
     def UPDATE(table):

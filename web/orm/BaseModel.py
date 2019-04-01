@@ -110,6 +110,12 @@ class BaseModel:
                 item[0].upper() + item[1:]
             )
             return self.__dict__[item]
+        if item.endswith('s') and item[:-1] in self.__lower_relationships__:
+            self.__dict__[item] = self.Relationship(
+                self,
+                item[0].upper() + item[1:-1]
+            )
+            return self.__dict__[item]
         raise AttributeError('{} not found'.format(item))
 
     def _generate_relationships(self):
@@ -165,3 +171,15 @@ class TempModel(BaseModel):
     def __init__(self, table_name, *args, **kwargs):
         self.__table__ = table_name
         super(TempModel, self).__init__(*args, **kwargs)
+
+    def __str__(self):
+        return '<Temp{}Model: {}>'.format(
+            self.__table__,
+            '{{\n{}\n}}'.format(',\n'.join(
+                '    {:12}: {}'.format(
+                    col.column_name,
+                    str(self.__dict__[col.column_name])
+                )
+                for col in self.__columns__
+            ))
+        )

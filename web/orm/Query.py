@@ -22,3 +22,12 @@ class Query(object):
         :return: new instance of table model
         """
         return Sql.INSERT(**values).INTO(self.table_name).do()
+
+    def delete(self, **values):
+        """
+        deletes object from dateabase
+
+        :param values:
+        :return:
+        """
+        return Sql.DELETE(self.table_name).WHERE(**values).do()

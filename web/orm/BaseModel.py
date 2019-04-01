@@ -11,6 +11,10 @@ class BaseModel:
     __table__: str = None
     __columns__: list = None
     __relationships__: dict = None
+    primary_keys: list = None
+
+    class ModelError(Exception):
+        pass
 
     class Relationship:
         """
@@ -33,9 +37,9 @@ class BaseModel:
             """
 
             if self._objs is None:
-                ref, curr = Sql.Sql.JoinedTable.resolve_attribute(
+                ref, curr = Sql.JoinedTable.resolve_attribute(
                     self.foreign_table.name,
-                    self.model_obj.__table__
+                    self.model_obj.__table__,
                 )
 
                 self._objs = Sql.Sql.SELECTFROM(
@@ -56,7 +60,13 @@ class BaseModel:
 
         :param list args: list of data members for object in order they were created.
         """
-        self.__columns__ = Sql.Table(self.__table__).columns
+        table = Sql.Table(self.__table__)
+        self.__columns__ = table.columns
+        self.__relationships__ = table.relationships
+        self.__lower_relationships__ = list(map(
+            lambda rel: rel.lower(),
+            self.__relationships__
+        ))
         self.__column_lot__ = {
             col.column_name: col
             for col in self.__columns__
@@ -68,9 +78,6 @@ class BaseModel:
         ))
 
         self._set_state(**kwargs)
-
-        if self.__relationships__ is None:
-            self.__relationships__ = {}
 
     def __str__(self):
         return '<{}Model: {}>'.format(
@@ -84,6 +91,12 @@ class BaseModel:
             ))
         )
 
+    def __setattr__(self, key, value):
+        if 'primary_keys' in self.__dict__ and key in self.__dict__['primary_keys']:
+            raise self.__dict__['ModelError']('Unable to modify primary key value')
+        self.__dict__[key] = value
+        # setattr(self, key, value)
+
     def __getattr__(self, item):
         """
         this is where relationships will be lazily resolved.
@@ -91,10 +104,10 @@ class BaseModel:
         """
         if item in self.__dict__:
             return self.__dict__[item]
-        if item in self.__relationships__:
+        if item in self.__lower_relationships__:
             self.__dict__[item] = self.Relationship(
                 self,
-                self.__relationships__[item]
+                item[0].upper() + item[1:]
             )
             return self.__dict__[item]
         raise AttributeError('{} not found'.format(item))
@@ -103,9 +116,9 @@ class BaseModel:
         """
         :return:
         """
-        for rel_name, table_name in self.__relationships__.items():
+        for table_name in self.__relationships__:
             self.__setattr__(
-                rel_name,
+                table_name,
                 self.Relationship(self, table_name)
             )
 
@@ -124,7 +137,7 @@ class BaseModel:
         for col, val in kwargs.items():
             self.__set_column_value(col, val)
 
-    def commit(self):
+    def update(self):
         """
         generate and execute sql to update object in db
 
@@ -134,12 +147,13 @@ class BaseModel:
         :return:
         """
         Sql.Sql.UPDATE(self.__table__).SET(**{
-            key: val
-            for key, val in self.__columns__
+            col.column_name: self.__getattr__(col.column_name)
+            for col in self.__columns__
+            if not col.primary_key
         }).WHERE(**{
-            key: val
-            for key, val in self.__columns__
-            if key in self.primary_keys
+            col.column_name: self.__getattr__(col.column_name)
+            for col in self.__columns__
+            if col.primary_key
         }).do()
 
 

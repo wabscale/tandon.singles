@@ -12,9 +12,6 @@ from .app import app
 
 class Person(BaseModel):
     __table__ = 'Person'
-    __relationships__ = {
-        'photos': 'Photo'
-    }
 
 
 class Photo(BaseModel):

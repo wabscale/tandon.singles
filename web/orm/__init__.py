@@ -5,4 +5,4 @@ from web.orm.utils import utils
 
 
 if __name__ == "__main__":
-    print(Sql.SELECTFROM('Person').WHERE(username='admin').do())
+    print(Sql.INSERT(photoOwner='admin').INTO('Photo').do())

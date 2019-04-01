@@ -4,6 +4,7 @@ import sys
 
 class Config:
     SECRET_KEY = os.urandom(32)
+    DEBUG = False
     DOMAIN = 'https://tandon.singles'
 
     REGISTRATION_ENABLED = True
@@ -25,6 +26,7 @@ class Config:
         os.makedirs(self.LOG_DIR, exist_ok=True)
         if all('gunicorn' not in arg for arg in sys.argv):
             self.SECRET_KEY = 'DEBUG'
+            self.DEBUG = True
             self.MYSQL_DATABASE_HOST = '127.0.0.1'
             self.DOMAIN = 'http://localhost:5000'
             self.VERBOSE_SQL_GENERATION = True

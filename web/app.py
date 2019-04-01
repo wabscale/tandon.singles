@@ -19,7 +19,7 @@ Bootstrap(app)
 CSRFProtect(app)
 db = MySQL(app)
 
-if app.config['VERBOSE_SQL_GENERATION']:
+if not app.config['DEBUG']:
     logging.basicConfig(filename=os.path.join(
         app.config['LOG_DIR'],
         'orm_log.log'

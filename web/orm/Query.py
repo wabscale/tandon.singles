@@ -3,7 +3,7 @@ from . import Sql
 
 class Query(object):
     def __init__(self, table_name):
-        self.table_name = table_name if isinstance(table_name, str) else table_name.__table__
+        self.table_name=table_name if isinstance(table_name, str) else table_name.__table__
 
     def find(self, **conditions):
         """

@@ -8,10 +8,10 @@ class BaseModel:
     to be the name of the table (along with any other convince
     methods).
     """
-    __table__: str = None
-    __columns__: list = None
-    __relationships__: dict = None
-    primary_keys: list = None
+    __table__: str=None
+    __columns__: list=None
+    __relationships__: dict=None
+    primary_keys: list=None
 
     class ModelError(Exception):
         pass
@@ -19,16 +19,16 @@ class BaseModel:
     class Relationship:
         """
         class BaseModel:
-            __table__ = 'Person'
-            __relationships__ = {
+            __table__='Person'
+            __relationships__={
                 'photos': 'Photo'
             }
         """
 
         def __init__(self, model_obj, foreign_table):
-            self.model_obj = model_obj
-            self.foreign_table = Sql.Table(foreign_table)
-            self._objs = None
+            self.model_obj=model_obj
+            self.foreign_table=Sql.Table(foreign_table)
+            self._objs=None
 
         def __iter__(self):
             """
@@ -37,12 +37,12 @@ class BaseModel:
             """
 
             if self._objs is None:
-                ref, curr = Sql.JoinedTable.resolve_attribute(
+                ref, curr=Sql.JoinedTable.resolve_attribute(
                     self.foreign_table.name,
                     self.model_obj.__table__,
                 )
 
-                self._objs = Sql.Sql.SELECTFROM(
+                self._objs=Sql.Sql.SELECTFROM(
                     self.foreign_table.name
                 ).JOIN(self.model_obj.__table__).WHERE(
                     '{table}.{primarykey}={value}'.format(
@@ -60,19 +60,19 @@ class BaseModel:
 
         :param list args: list of data members for object in order they were created.
         """
-        table = Sql.Table(self.__table__)
-        self.__columns__ = table.columns
-        self.__relationships__ = table.relationships
-        self.__lower_relationships__ = list(map(
+        table=Sql.Table(self.__table__)
+        self.__columns__=table.columns
+        self.__relationships__=table.relationships
+        self.__lower_relationships__=list(map(
             lambda rel: rel.lower(),
             self.__relationships__
         ))
-        self.__column_lot__ = {
+        self.__column_lot__={
             col.column_name: col
             for col in self.__columns__
         }
 
-        self.primary_keys = list(filter(
+        self.primary_keys=list(filter(
             lambda column: column.primary_key,
             self.__columns__
         ))
@@ -94,7 +94,7 @@ class BaseModel:
     def __setattr__(self, key, value):
         if 'primary_keys' in self.__dict__ and key in self.__dict__['primary_keys']:
             raise self.__dict__['ModelError']('Unable to modify primary key value')
-        self.__dict__[key] = value
+        self.__dict__[key]=value
         # setattr(self, key, value)
 
     def __getattr__(self, item):
@@ -105,13 +105,13 @@ class BaseModel:
         if item in self.__dict__:
             return self.__dict__[item]
         if item in self.__lower_relationships__:
-            self.__dict__[item] = self.Relationship(
+            self.__dict__[item]=self.Relationship(
                 self,
                 item[0].upper() + item[1:]
             )
             return self.__dict__[item]
         if item.endswith('s') and item[:-1] in self.__lower_relationships__:
-            self.__dict__[item] = self.Relationship(
+            self.__dict__[item]=self.Relationship(
                 self,
                 item[0].upper() + item[1:-1]
             )
@@ -129,12 +129,12 @@ class BaseModel:
             )
 
     def __set_column_value(self, column_name, value):
-        col = self.__column_lot__[column_name]
+        col=self.__column_lot__[column_name]
         if value is not None:
             if col.data_type == 'timestamp' and type(value) == str:
-                value = utils.utils.strptime(value)
+                value=utils.utils.strptime(value)
             elif col.data_type in ('int', 'tinyint'):
-                value = int(value)
+                value=int(value)
         self.__setattr__(col.column_name, value)
 
     def _set_state(self, **kwargs):
@@ -169,7 +169,7 @@ class TempModel(BaseModel):
     """
 
     def __init__(self, table_name, *args, **kwargs):
-        self.__table__ = table_name
+        self.__table__=table_name
         super(TempModel, self).__init__(*args, **kwargs)
 
     def __str__(self):

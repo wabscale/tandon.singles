@@ -6,6 +6,11 @@ from web.orm.utils import utils
 
 if __name__ == "__main__":
     from web.models import *
-    p = Query('Person').find(username='admin').first()
+
+    # admin=Query('Person').new(username='admin')
+    p=Query('Person').find(username='admin').first()
+    photo=Query('Photo').new(photoOwner='admin')
+
     print(p)
-    print('\n'.join(str(i) for i in list(p.photos)))
+
+    print('\n' + '\n'.join(str(i) for i in list(p.photos)))

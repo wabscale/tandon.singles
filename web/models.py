@@ -6,16 +6,16 @@ import imghdr
 import time
 import os
 
-from .orm import Sql, BaseModel, utils
+from .orm import Sql, BaseModel, utils, Query
 from .app import app
 
 
 class Person(BaseModel):
-    __table__ = 'Person'
+    __table__='Person'
 
 
 class Photo(BaseModel):
-    __table__ = 'Photo'
+    __table__='Photo'
 
     @staticmethod
     def create(image, owner, caption, all_followers):
@@ -27,28 +27,28 @@ class Photo(BaseModel):
         :return: new photo object
         """
 
-        filestream = image.data.stream
+        filestream=image.data.stream
         with tempfile.NamedTemporaryFile() as f:
             f.write(filestream.read())
             filestream.seek(0)
-            ext = imghdr.what(f.name)
+            ext=imghdr.what(f.name)
 
         if ext not in ('png', 'jpeg', 'gif'):
             # handle invalid file
             return ext
 
-        sha256 = lambda s: hashlib.sha256(s.encode()).hexdigest()
+        sha256=lambda s: hashlib.sha256(s.encode()).hexdigest()
 
-        filename = '{}.{}'.format(sha256('{}{}{}{}'.format(
+        filename='{}.{}'.format(sha256('{}{}{}{}'.format(
             str(time.time()), caption, owner, os.urandom(0x10)
         )), ext)
 
-        filedir = os.path.join(
+        filedir=os.path.join(
             app.config['UPLOAD_DIR'],
             sha256(owner),
         )
 
-        filepath = os.path.join(
+        filepath=os.path.join(
             filedir,
             filename
         )
@@ -60,7 +60,7 @@ class Photo(BaseModel):
         Sql.INSERT(
             allFollowers=all_followers,
             photoOwner=owner.username,
-            timestamp=str(est_now()),
+            timestamp=str(utils.est_now()),
             filePath=filepath,
             caption=caption,
         ).INTO('Photo')()
@@ -115,10 +115,10 @@ class User:
     to load its information out of the database.
     """
     def __init__(self, username):
-        self.username, self.password = (None,)*2
-        self.person = Query(Person).find(username=username).first()
+        self.username, self.password=(None,)*2
+        self.person=Query(Person).find(username=username).first()
         if self.person is not None:
-            self.username, self.password = self.person.username, self.person.password
+            self.username, self.password=self.person.username, self.person.password
 
     def check_password(self, pword):
         return check_password_hash(self.password, pword) if self.username is not None else False
@@ -153,7 +153,7 @@ class User:
         :param str password:
         :return User: new User object
         """
-        password = generate_password_hash(password)
+        password=generate_password_hash(password)
         print(password)
         Sql.INSERT(
             username=username,
@@ -162,15 +162,15 @@ class User:
         return User(username)
 
 
-# p = Query(Photo).new(photoOwner='admin')
+# p=Query(Photo).new(photoOwner='admin')
 # print(p)
 
 # print(app.config['MYSQL_DATABASE_HOST'])
 # User.create('admin', 'password')
-# p = Query(Person).find(username='admin').first()
+# p=Query(Person).find(username='admin').first()
 # print(list(p.photos))
 # print(User('admin'))
-# p = Sql.SELECTFROM('Person').WHERE(username='admin').execute()[0]
+# p=Sql.SELECTFROM('Person').WHERE(username='admin').execute()[0]
 # print(p.photos)
 # print(Sql.UPDATE('Photo').SET(photoID=1).WHERE(photoID=2).gen())
 # print(*Sql.SELECT('username').FROM('Person').WHERE(username='j'))

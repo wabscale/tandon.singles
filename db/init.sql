@@ -20,7 +20,7 @@ CREATE TABLE Photo(
     caption VARCHAR(1024),
     allFollowers Boolean,
     PRIMARY KEY (photoID),
-    FOREIGN KEY (photoOwner) REFERENCES Person(username)
+    FOREIGN KEY (photoOwner) REFERENCES Person(username) ON DELETE CASCADE
 );
 
 CREATE TABLE Follow(
@@ -28,15 +28,15 @@ CREATE TABLE Follow(
     followeeUsername VARCHAR(20),
     acceptedfollow Boolean,
     PRIMARY KEY (followerUsername, followeeUsername),
-    FOREIGN KEY (followerUsername) REFERENCES Person(username),
-    FOREIGN KEY (followeeUsername) REFERENCES Person(username)
+    FOREIGN KEY (followerUsername) REFERENCES Person(username) ON DELETE CASCADE,
+    FOREIGN KEY (followeeUsername) REFERENCES Person(username) ON DELETE CASCADE
 );
 
 CREATE TABLE CloseFriendGroup(
     groupName VARCHAR(20),
     groupOwner VARCHAR(20),
     PRIMARY KEY (groupName, groupOwner),
-    FOREIGN KEY (groupOwner) REFERENCES Person(username)
+    FOREIGN KEY (groupOwner) REFERENCES Person(username) ON DELETE CASCADE
 );
 
 CREATE TABLE Belong(
@@ -44,8 +44,8 @@ CREATE TABLE Belong(
     groupOwner VARCHAR(20),
     username VARCHAR(20),
     PRIMARY KEY (groupName, groupOwner, username),
-    FOREIGN KEY (groupName, groupOwner) REFERENCES CloseFriendGroup(groupName, groupOwner),
-    FOREIGN KEY (username) REFERENCES Person(username)
+    FOREIGN KEY (groupName, groupOwner) REFERENCES CloseFriendGroup(groupName, groupOwner) ON DELETE CASCADE,
+    FOREIGN KEY (username) REFERENCES Person(username) ON DELETE CASCADE
 );
 
 CREATE TABLE Share(
@@ -53,8 +53,8 @@ CREATE TABLE Share(
     groupOwner VARCHAR(20),
     photoID int,
     PRIMARY KEY (groupName, groupOwner, photoID),
-    FOREIGN KEY (groupName, groupOwner) REFERENCES CloseFriendGroup(groupName, groupOwner),
-    FOREIGN KEY (photoID) REFERENCES Photo(photoID)
+    FOREIGN KEY (groupName, groupOwner) REFERENCES CloseFriendGroup(groupName, groupOwner) ON DELETE CASCADE,
+    FOREIGN KEY (photoID) REFERENCES Photo(photoID) ON DELETE CASCADE
 );
 
 CREATE TABLE Liked(
@@ -62,8 +62,8 @@ CREATE TABLE Liked(
     photoID int,
     timestamp Timestamp,
     PRIMARY KEY (username, photoID),
-    FOREIGN KEY (username) REFERENCES Person(username),
-    FOREIGN KEY (photoID) REFERENCES Photo(photoID)
+    FOREIGN KEY (username) REFERENCES Person(username) ON DELETE CASCADE,
+    FOREIGN KEY (photoID) REFERENCES Photo(photoID) ON DELETE CASCADE
 );
 
 CREATE TABLE Tag(
@@ -71,8 +71,8 @@ CREATE TABLE Tag(
     photoID int,
     acceptedTag Boolean,
     PRIMARY KEY (username, photoID),
-    FOREIGN KEY (username) REFERENCES Person(username),
-    FOREIGN KEY (photoID) REFERENCES Photo(photoID)
+    FOREIGN KEY (username) REFERENCES Person(username) ON DELETE CASCADE,
+    FOREIGN KEY (photoID) REFERENCES Photo(photoID) ON DELETE CASCADE
 );
 
 CREATE TABLE Comment(
@@ -81,6 +81,6 @@ CREATE TABLE Comment(
     commentText VARCHAR(1024),
     timestamp Timestamp,
     PRIMARY KEY (photoID, username),
-    FOREIGN KEY (photoID) REFERENCES Photo(photoID),
-    FOREIGN KEY (username) REFERENCES Person(username)
+    FOREIGN KEY (photoID) REFERENCES Photo(photoID) ON DELETE CASCADE,
+    FOREIGN KEY (username) REFERENCES Person(username) ON DELETE CASCADE
 );

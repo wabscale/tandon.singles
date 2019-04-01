@@ -7,8 +7,13 @@ from ..app import db, app, logging
 
 
 class Table:
-    column_info_sql = 'SELECT COLUMN_NAME, DATA_TYPE, COLUMN_KEY FROM INFORMATION_SCHEMA.COLUMNS ' \
-                      'WHERE TABLE_NAME = %s AND TABLE_SCHEMA = DATABASE();'
+    column_info_sql = 'SELECT COLUMN_NAME, DATA_TYPE, COLUMN_KEY ' \
+        'FROM INFORMATION_SCHEMA.COLUMNS ' \
+        'WHERE TABLE_NAME = %s ' \
+        'AND TABLE_SCHEMA = DATABASE();'
+    relationship_info_sql = 'SELECT TABLE_NAME ' \
+        'FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE ' \
+        'WHERE REFERENCED_TABLE_NAME = %s;'
 
     @dataclass
     class _Column:
@@ -16,8 +21,11 @@ class Table:
         data_type: str
         primary_key: bool
 
-        def __init__(self, table_name, column_name, date_type, primary_key):
-            self.table_name, self.column_name, self.data_type, self.primary_key = table_name, column_name, date_type, True if primary_key == 'PRI' else False
+        def __init__(self, table_name, column_name, data_type, primary_key):
+            self.table_name = table_name
+            self.column_name = column_name
+            self.data_type = data_type
+            self.primary_key = primary_key == 'PRI'
 
         def __str__(self):
             return '`{}`.`{}`'.format(self.table_name, self.column_name)
@@ -31,24 +39,36 @@ class Table:
                 lambda column: column.primary_key,
                 self.columns
             ))
+            self.relationships = self._get_relationships()
             Sql.__cache__['tables'][name] = self
         else:
             self.columns = Sql.__cache__['tables'][name].columns
             self.primary_keys = Sql.__cache__['tables'][name].primary_keys
+            self.relationships = Sql.__cache__['tables'][name].relationships
 
     def _get_columns(self):
         """
-        returns list of columsn for self.ref_table
+        :returns: list of columns for self.ref_table
         """
-        with db.connect() as cursor:
-            cursor.execute(
+        return [
+            self._Column(self.name, *r)
+            for r in Sql.execute_raw(
                 self.column_info_sql,
                 (self.name,)
             )
-            return [
-                self._Column(self.name, *r)
-                for r in cursor.fetchall()
-            ]
+        ]
+
+    def _get_relationships(self):
+        """
+        :return: list of relationships for self.name
+        """
+        return list(map(
+            lambda row: row[0],
+            Sql.execute_raw(
+                self.relationship_info_sql,
+                (self.name,)
+            )
+        ))
 
     def __str__(self):
         """
@@ -234,6 +254,19 @@ class Sql:
 
     def __del__(self, *_):
         pass
+
+    @staticmethod
+    def execute_raw(sql, args=None):
+        """
+        Will execute then give back all output rows.
+
+        :param str sql: raw sql
+        :param tuple args: iterable arguments
+        :return:
+        """
+        with db.connect() as cursor:
+            cursor.execute(sql, args)
+            return cursor.fetchall()
 
     def do(self):
         """
@@ -491,6 +524,8 @@ class Sql:
             sql += '\nWHERE {} = LAST_INSERT_ID();'.format(
                 str(self._table.primary_keys[0])
             )
+        if self.__verbose_execution__:
+            logging.info('Generated: {}'.format((sql, args,)))
         return sql, args
 
     @staticmethod
@@ -527,7 +562,7 @@ class Sql:
                            if self._type == 'UPDATE' else ''
 
             if self.__verbose_generation__:
-                logging.warning('Generated: {}'.format(self._sql))
+                logging.info('Generated: {}'.format(self._sql))
         return self._sql
 
     def _generate_models(self, **results):
@@ -575,7 +610,7 @@ class Sql:
         if self._result is None or not use_cache:
 
             if self.__verbose_execution__:
-                logging.warning('Executing:', self._sql)
+                logging.info('Executing:', self._sql)
 
             with db.connect() as cursor:
                 cursor.execute(*self._sql)
@@ -607,7 +642,7 @@ class Sql:
                         for kwargs in model_init_kwargs
                     ]
                 else:  # insert or update
-                    self._result = True
+                    self._result = [None]
         return self._result
 
     def WHERE(self, *specified_conditions, **conditions):

@@ -15,6 +15,7 @@ class Config:
     MYSQL_DATABASE_DB = 'TS'
 
     VERBOSE_SQL_GENERATION = True
+    VERBOSE_SQL_EXECUTION = True
 
     UPLOAD_DIR = os.path.join(os.getcwd(), '.data/uploads')
     LOG_DIR = os.path.join(os.getcwd(), '.data/log')

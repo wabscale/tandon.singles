@@ -14,13 +14,14 @@ class Config:
     MYSQL_DATABASE_HOST = 'db'
     MYSQL_DATABASE_DB = 'TS'
 
-    VERBOSE_SQL_GENERATION = True
+    VERBOSE_SQL_GENERATION = False
     VERBOSE_SQL_EXECUTION = True
+    SQL_CACHE_TIMEOUT = 5
 
     UPLOAD_DIR = os.path.join(os.getcwd(), '.data/uploads')
     LOG_DIR = os.path.join(os.getcwd(), '.data/log')
 
-    DB_LOG_FILE = os.path.join(os.getcwd(), LOG_DIR, 'db_log.log')
+    DB_LOG_FILE = os.path.join(LOG_DIR, 'db_log.log')
 
     def __init__(self):
         os.makedirs(self.UPLOAD_DIR, exist_ok=True)
@@ -30,4 +31,4 @@ class Config:
             self.DEBUG = True
             self.MYSQL_DATABASE_HOST = '127.0.0.1'
             self.DOMAIN = 'http://localhost:5000'
-            self.VERBOSE_SQL_GENERATION = True
+            self.VERBOSE_SQL_GENERATION = False

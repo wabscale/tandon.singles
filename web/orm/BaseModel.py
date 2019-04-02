@@ -4,13 +4,12 @@ from ..app import app, logging
 from . import Types as types
 
 
-class BaseModel:
+class BaseModel(object):
     """
-    All subclasses just need to define their own __table__
+    All subclasses just need to define their own __name__
     to be the name of the table (along with any other convince
     methods).
     """
-    __table__: str=None
     __column_info__: list=None
     __relationships__: dict=None
     primary_keys: list=None
@@ -21,7 +20,7 @@ class BaseModel:
     class Relationship:
         """
         class BaseModel:
-            __table__='Person'
+            __name__='Person'
             __relationships__={
                 'photos': 'Photo'
             }
@@ -41,12 +40,12 @@ class BaseModel:
             if self._objs is None:
                 ref, curr=Sql.JoinedTable.resolve_attribute(
                     self.foreign_table.name,
-                    self.model_obj.__table__,
+                    self.model_obj.__name__,
                 )
 
                 self._objs=Sql.Sql.SELECTFROM(
                     self.foreign_table.name
-                ).JOIN(self.model_obj.__table__).WHERE(
+                ).JOIN(self.model_obj.__name__).WHERE(
                     '{table}.{primarykey}={value}'.format(
                         table=self.foreign_table.name,
                         primarykey=ref,
@@ -62,7 +61,7 @@ class BaseModel:
 
         :param list args: list of data members for object in order they were created.
         """
-        table=Sql.Table(self.__table__)
+        table=Sql.Table(self.__name__)
         self.__column_info__=table.columns
         self.__relationships__=table.relationships
         self.__lower_relationships__=list(map(
@@ -83,7 +82,7 @@ class BaseModel:
 
     def __str__(self):
         return '<{}Model: {}>'.format(
-            self.__table__,
+            self.__name__,
             '{{\n{}\n}}'.format(',\n'.join(
                 '    {:12}: {}'.format(
                     col.column_name,
@@ -104,8 +103,9 @@ class BaseModel:
         this is where relationships will be lazily resolved.
         :return:
         """
-        if item in self.__dict__:
-            return self.__dict__[item]
+        if item == '__name__': # boy this is a messy fix
+            return self.__class__.__name__
+            # return super(BaseModel, self).__getattribute__(item)
         if item in self.__lower_relationships__:
             self.__dict__[item]=self.Relationship(
                 self,
@@ -118,7 +118,7 @@ class BaseModel:
                 item[0].upper() + item[1:-1]
             )
             return self.__dict__[item]
-        raise AttributeError('{} not found'.format(item))
+        return super(BaseModel, self).__getattribute__(item)
 
     def _generate_relationships(self):
         """
@@ -152,6 +152,8 @@ class BaseModel:
             for item, value in class_type.__dict__.items()
             if isinstance(value, types.Column)
         ]
+        if len(columns) == 0:
+            return None
         base='CREATE TABLE IF NOT EXISTS {table_name} (\n{columns}{refs}\n);'
         sql=base.format(
             table_name=class_type.__name__,
@@ -177,7 +179,7 @@ class BaseModel:
 
         :return:
         """
-        Sql.Sql.UPDATE(self.__table__).SET(**{
+        Sql.Sql.UPDATE(self.__name__).SET(**{
             col.column_name: self.__getattr__(col.column_name)
             for col in self.__column_info__
             if not col.primary_key
@@ -193,7 +195,7 @@ class BaseModel:
 
         :return:
         """
-        Sql.Sql.DELETE(self.__table__).WHERE(**{
+        Sql.Sql.DELETE(self.__name__).WHERE(**{
             col.column_name: self.__getattr__(col.column_name)
             for col in self.__column_info__
             if col.primary_key
@@ -206,12 +208,12 @@ class TempModel(BaseModel):
     """
 
     def __init__(self, table_name, **kwargs):
-        self.__table__=table_name
+        self.__name__=table_name
         super(TempModel, self).__init__(**kwargs)
 
     def __str__(self):
         return '<Temp{}Model: {}>'.format(
-            self.__table__,
+            self.__name__,
             '{{\n{}\n}}'.format(',\n'.join(
                 '    {:12}: {}'.format(
                     col.column_name,

@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from datetime import datetime, timedelta
 from scanf import scanf
 import string
 
@@ -148,6 +149,17 @@ class JoinedTable(Table):
         return self._gen()
 
 
+@dataclass
+class CachedQuery:
+    timestamp: datetime
+    result: list
+
+    @property
+    def valid(self):
+        timeout=app.config['SQL_CACHE_TIMEOUT']
+        return datetime.now() - self.timestamp < timedelta(seconds=timeout)
+
+
 class Sql:
     """
     _type    : type of expression (select, insert, ...)
@@ -173,7 +185,8 @@ class Sql:
     __sep__=' '
 
     __cache__={
-        'tables': {}
+        'tables': {},
+        'queries': {}
     }
 
     class ExpressionError(Exception):
@@ -260,29 +273,8 @@ class Sql:
     def __del__(self, *_):
         pass
 
-    @staticmethod
-    def execute_raw(sql, args=None):
-        """
-        Will execute then give back all output rows.
-
-        :param str sql: raw sql
-        :param tuple args: iterable arguments
-        :return:
-        """
-        if Sql.__verbose_execution__:
-            msg='Executing: {} {}'.format(sql, args)
-            logging.info(msg)
-        with db.connect() as cursor:
-            cursor.execute(sql, args)
-            return cursor.fetchall()
-
-    def do(self):
-        """
-        This is a cleaner name for insert queries to call to execute.
-
-        :return: calls self.all()
-        """
-        return self.first()
+    def __hash__(self):
+        return hash(str(self.gen()))
 
     def _resolve_attribute(self, attr_name, skip_curr=False):
         """
@@ -480,7 +472,8 @@ class Sql:
             ['%s'] * len(list(self._insert_values.values()))
         )
 
-        insert_sql='INSERT INTO `{table}`' + Sql.__sep__ + '({columns})' + Sql.__sep__ + 'VALUES ({values})'.format(
+        base='INSERT INTO `{table}`' + Sql.__sep__ + '({columns})' + Sql.__sep__ + 'VALUES ({values})'
+        insert_sql=base.format(
             columns=columns,
             values=values,
             table=table,
@@ -574,7 +567,7 @@ class Sql:
         """
         models=BaseModel.BaseModel.__subclasses__()
         for model in models:
-            if model.__table__ == table_name:
+            if model.__name__ == table_name:
                 return model
         return BaseModel.TempModel
 
@@ -622,7 +615,24 @@ class Sql:
                 logging.info(msg)
         return self._sql
 
-    def _generate_models(self, **results):
+    def append_raw(self, sql, args=None):
+        """
+        You can add any raw sql, along with its args here
+
+        :param sql:
+        :param args:
+        :return:
+        """
+        if self._raw_append_values is None:
+            self._raw_append_values=[]
+        if args is None:
+            args=[]
+        self._raw_append_values.append([
+            sql, args
+        ])
+        return self
+
+    def _generate_models(self, *results):
         Model=self._resolve_model(self._table.name)
         model_init_kwargs=[
             {
@@ -665,61 +675,79 @@ class Sql:
         model for you.
         """
         self.gen()
-        if self._result is None or not use_cache:
+        if use_cache and hash(self) in Sql.__cache__['queries']:
+            cache_entry=Sql.__cache__['queries'][hash(self)]
+            if cache_entry.valid:
+                if Sql.__verbose_execution__:
+                    msg='Using Cache for: {} {}'.format(*self._sql)
+                    logging.info(msg)
+                return cache_entry.result
+            del Sql.__cache__['queries'][hash(self)]
 
-            if Sql.__verbose_execution__:
-                msg='Executing: {} {}'.format(*self._sql)
-                logging.info(msg)
+        if Sql.__verbose_execution__:
+            msg='Executing: {} {}'.format(*self._sql)
+            logging.info(msg)
 
-            with db.connect() as cursor:
-                cursor.execute(*self._sql)
-                if self._type in ('SELECT', 'INSERT'):
-                    Model=self._resolve_model(self._table.name)
+        with db.connect() as cursor:
+            cursor.execute(*self._sql)
+            result=list()
+            if self._type in ('SELECT', 'INSERT'):
+                Model=self._resolve_model(self._table.name)
 
-                    if self._type == 'INSERT':
-                        cursor.fetchall()
-                        cursor.execute(*self._generate_insert_select())
+                if self._type == 'INSERT':
+                    cursor.fetchall()
+                    sql=self._generate_insert_select()
+                    if Sql.__verbose_execution__:
+                        msg='Executing: {} {}'.format(*sql)
+                        logging.info(msg)
+                    cursor.execute(sql)
 
-                    raw_results=cursor.fetchall()
+                result=self._generate_models(*cursor.fetchall())
 
-                    model_init_kwargs=[
-                        {
-                            col.column_name: val
-                            for col, val in zip(self._table.columns, item)
-                        }
-                        for item in raw_results
-                    ]
+            Sql.__cache__['queries'][hash(self)]=CachedQuery(
+                result=result,
+                timestamp=datetime.now()
+            )
 
-                    if len(model_init_kwargs) == 0:
-                        return []
+            return result
 
-                    self._result=[
-                        Model(**kwargs)
-                        for kwargs in model_init_kwargs
-                    ] if Model is not BaseModel.TempModel else [
-                        Model(self._table.name, **kwargs)
-                        for kwargs in model_init_kwargs
-                    ]
-                else:  # update
-                    self._result=[None]
-        return self._result
-
-    def append_raw(self, sql, args=None):
+    def do(self):
         """
-        You can add any raw sql, along with its args here
+        This is a cleaner name for insert queries to call to execute.
 
-        :param sql:
-        :param args:
+        :return: calls self.all()
+        """
+        return self.first()
+
+    @staticmethod
+    def execute_raw(sql, args=None, use_cache=True):
+        """
+        Will execute then give back all output rows.
+
+        :param str sql: raw sql
+        :param tuple args: iterable arguments
         :return:
         """
-        if self._raw_append_values is None:
-            self._raw_append_values=[]
-        if args is None:
-            args=[]
-        self._raw_append_values.append([
-            sql, args
-        ])
-        return self
+        cache_id=hash('{}{}'.format(str(sql), str(args)))
+        if use_cache and cache_id in Sql.__cache__['queries']:
+            cached_query=Sql.__cache__['queries'][cache_id]
+            if cached_query.valid:
+                return cached_query.result
+            del Sql.__cache__['queries'][cache_id]
+
+        if Sql.__verbose_execution__:
+            msg='Executing: {} {}'.format(sql, args)
+            logging.info(msg)
+        with db.connect() as cursor:
+            cursor.execute(sql, args)
+            result=cursor.fetchall()
+            Sql.__cache__['queries'][
+                hash('{}{}'.format(str(sql), str(args)))
+            ]=CachedQuery(
+                result=result,
+                timestamp=datetime.now()
+            )
+            return result
 
     def WHERE(self, *specified_conditions, **conditions):
         """

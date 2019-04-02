@@ -1,4 +1,5 @@
 from werkzeug.security import generate_password_hash, check_password_hash
+from flask_login import current_user
 
 import tempfile
 import hashlib
@@ -6,10 +7,15 @@ import imghdr
 import time
 import os
 
-from .orm import Sql, utils, Query
+from .orm import Sql, Query, BaseModel
 from .app import app
 
-class Photo:
+class Photo(BaseModel):
+    @property
+    def image_link(self):
+        dir_name, image_name=os.path.split(self.filePath)
+        _, dir_name=os.path.split(dir_name)
+        return '/img/{}/{}'.format(dir_name, image_name)
 
     @staticmethod
     def create(image, owner, caption, all_followers):
@@ -51,13 +57,12 @@ class Photo:
 
         image.data.save(filepath)
 
-        Sql.INSERT(
+        Query('Photo').new(
             allFollowers=all_followers,
-            photoOwner=owner.username,
-            timestamp=str(utils.est_now()),
+            photoOwner=owner,
             filePath=filepath,
             caption=caption,
-        ).INTO('Photo')()
+        )
 
     @staticmethod
     def owned_by(username):
@@ -84,23 +89,27 @@ class Photo:
 
         :return: [ Photo ]
         """
-        return sorted(list(
-            # photos that are in close friend groups that username is in
-            Sql.SELECTFROM('Photos').JOIN('Share', 'CloseFriendGroup', 'Belong').WHERE(
-                username=username
-            )
-        ) + list(
-            # subscibed photos
-            Sql.SELECTFROM('Photos').JOIN('Follow').WHERE(
-                followeeUsername=username,
-                acceptedfollow=True
-            )
-        ) + list(
-            # users photos
-            Sql.SELECTFROM('Photos').JOIN('Person').WHERE(
-                username=username
-            )
-        ), key=lambda photo: photo.timestamp)
+        u=Query('Person').find(
+            username=username
+        ).first()
+        return u.photos
+        # return sorted(list(
+        #     # photos that are in close friend groups that username is in
+        #     Sql.SELECTFROM('Photos').JOIN('Share', 'CloseFriendGroup', 'Belong').WHERE(
+        #         username=username
+        #     )
+        # ) + list(
+        #     # subscibed photos
+        #     Sql.SELECTFROM('Photos').JOIN('Follow').WHERE(
+        #         followeeUsername=username,
+        #         acceptedfollow=True
+        #     )
+        # ) + list(
+        #     # users photos
+        #     Sql.SELECTFROM('Photos').JOIN('Person').WHERE(
+        #         username=username
+        #     )
+        # ), key=lambda photo: photo.timestamp)
 
 
 class User:
@@ -110,7 +119,7 @@ class User:
     """
     def __init__(self, username):
         self.username, self.password=(None,)*2
-        self.person=Query(Person).find(username=username).first()
+        self.person=Query('Person').find(username=username).first()
         if self.person is not None:
             self.username, self.password=self.person.username, self.person.password
 
@@ -118,13 +127,13 @@ class User:
         return check_password_hash(self.password, pword) if self.username is not None else False
 
     def is_authenticated(self):
-        return self.username is not None
+        return self.person is not None
 
     def is_active(self):
         return True
 
     def is_anonymous(self):
-        return self.username is None
+        return self.person is None
 
     def get_id(self):
         return self.username

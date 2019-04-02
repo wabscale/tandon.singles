@@ -9,6 +9,9 @@ from web.orm.utils import utils
 #     test_name=Column(Varchar(128), primary_key=True, references='Person.username')
 
 if __name__ == "__main__":
+    from web.models import Photo
+    p=Query(Photo).find(photoOwner='admin').all()
+    print(p)
     # Query('Person').new(username='admin')
-    Sql.SELECTFROM('Person').WHERE(username='admin').GROUPBY('lname').ORDERBY('username').first()
-    Query.create_all()
+    # Sql.SELECTFROM('Person').WHERE(username='admin').GROUPBY('lname').ORDERBY('username').first()
+    # Query.create_all()

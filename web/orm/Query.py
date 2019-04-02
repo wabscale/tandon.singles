@@ -1,5 +1,5 @@
 from . import Sql
-
+from . import BaseModel, TempModel
 
 class Query(object):
     def __init__(self, table_name):
@@ -31,3 +31,16 @@ class Query(object):
         :return:
         """
         return Sql.DELETE(self.table_name).WHERE(**values).do()
+
+    @staticmethod
+    def create_all():
+        """
+
+        :return:
+        """
+        for model_type in BaseModel.__subclasses__():
+            if model_type == TempModel:
+                continue
+            Sql.execute_raw(
+                BaseModel.__gen_sql__(model_type)
+            )

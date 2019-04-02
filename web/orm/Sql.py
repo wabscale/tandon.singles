@@ -110,12 +110,11 @@ class JoinedTable(Table):
 
     @staticmethod
     def resolve_attribute(current_table, foreign_table):
-        with db.connect() as cursor:
-            cursor.execute(
-                JoinedTable.ref_info_sql,
-                (current_table, foreign_table,)
-            )
-            return cursor.fetchone()
+        raw = Sql.execute_raw(
+            JoinedTable.ref_info_sql,
+            (current_table, foreign_table,)
+        )
+        return None if len(raw) == 0 else raw[0]
 
     def _gen(self):
         """
@@ -170,7 +169,8 @@ class Sql:
     """
 
     __verbose_generation__=app.config['VERBOSE_SQL_GENERATION']
-    __verbose_execution__=False
+    __verbose_execution__=app.config['VERBOSE_SQL_EXECUTION']
+    __sep__=' '
 
     __cache__={
         'tables': {}
@@ -217,6 +217,8 @@ class Sql:
         self._columns       =None
         self._joins         =None
         self._conditions    =None
+        self._group_by_column=None
+        self._order_by_column=None
 
         # INSERT
         self._insert_values =None
@@ -267,6 +269,9 @@ class Sql:
         :param tuple args: iterable arguments
         :return:
         """
+        if Sql.__verbose_execution__:
+            msg='Executing: {} {}'.format(sql, args)
+            logging.info(msg)
         with db.connect() as cursor:
             cursor.execute(sql, args)
             return cursor.fetchall()
@@ -369,19 +374,14 @@ class Sql:
         )) if self._joins is not None else []
         all_tables=joined_tables + [self._table]
         for table_name in all_tables:
-            with db.connect() as cursor:
-                cursor.execute(
-                    column_info_sql,
-                    (table_name,)
-                )
-                current_table_attrs=cursor.fetchall()
-                for attr in map(lambda x: x[0], current_table_attrs):
-                    self._attrs.append(
-                        self._Attribute(
-                            table=table_name,
-                            value=attr,
-                        )
+            current_table_attrs=Sql.execute_raw(column_info_sql, table_name)
+            for attr in map(lambda x: x[0], current_table_attrs):
+                self._attrs.append(
+                    self._Attribute(
+                        table=table_name,
+                        name=attr,
                     )
+                )
 
     def _generate_conditions(self):
         """
@@ -394,9 +394,8 @@ class Sql:
         ->
         "WHERE id=%i", (1,)
         """
-        return ('\n' + '\n'.join(
-            '{operator} `{table}`.`{attr}`={placeholder}'.format(
-                placeholder='%s',
+        return (Sql.__sep__ + Sql.__sep__.join(
+            '{operator} `{table}`.`{attr}` = %s'.format(
                 operator=operator,
                 table=table,
                 attr=attr,
@@ -412,7 +411,7 @@ class Sql:
         This method will hand back the sql for the
         joins in the expression.
         """
-        return '\n' + '\n'.join(
+        return Sql.__sep__ + Sql.__sep__.join(
             str(joined_table)
             for joined_table in self._joins
         ) if self._joins is not None else ''
@@ -422,6 +421,18 @@ class Sql:
             column_table=self._resolve_attribute(column_name),
             column_name=column_name
         ) for column_name in self._columns) if self._columns != ['*'] else '*'
+
+    def _generate_groupby(self):
+        return Sql.__sep__ + 'GROUP BY `{table_name}`.`{column_name}`'.format(
+            table_name=self._resolve_attribute(self._group_by_column),
+            column_name=self._group_by_column,
+        ) if self._group_by_column is not None else ''
+
+    def _generate_orderby(self):
+        return Sql.__sep__ + 'ORDER BY `{table_name}`.`{column_name}`'.format(
+            table_name=self._resolve_attribute(self._order_by_column),
+            column_name=self._order_by_column,
+        ) if self._order_by_column is not None else ''
 
     def _generate_select(self):
         """
@@ -434,18 +445,22 @@ class Sql:
                 'Expression state incomplete'
             )
 
-        base='SELECT {columns}\nFROM {table}{joins}{conditions}'
+        base='SELECT {columns}' + Sql.__sep__ + 'FROM {table}{joins}{conditions}{groupby}{orderby}'
 
         table='`{table}`'.format(table=self._table)
         columns=self._generate_select_columns()
         conditions, args=self._generate_conditions()
         joins=self._generate_joins()
+        groupby=self._generate_groupby()
+        orderby=self._generate_orderby()
 
         return base.format(
             conditions=conditions,
             columns=columns,
             table=table,
             joins=joins,
+            groupby=groupby,
+            orderby=orderby,
         ), args
 
     def _generate_insert(self):
@@ -465,7 +480,7 @@ class Sql:
             ['%s'] * len(list(self._insert_values.values()))
         )
 
-        insert_sql='INSERT INTO `{table}`\n({columns})\nVALUES ({values})'.format(
+        insert_sql='INSERT INTO `{table}`' + Sql.__sep__ + '({columns})' + Sql.__sep__ + 'VALUES ({values})'.format(
             columns=columns,
             values=values,
             table=table,
@@ -525,11 +540,13 @@ class Sql:
         else:
             sql, args=Sql.SELECTFROM(self._table.name).gen()
             sql=sql[:-1]  # cut off
-            sql += '\nWHERE {}=LAST_INSERT_ID()'.format(
+            sql += Sql.__sep__ + 'WHERE {}=LAST_INSERT_ID()'.format(
                 str(self._table.primary_keys[0])
             )
-        if self.__verbose_execution__:
-            logging.warning('Generated: {}'.format((sql, args,)))
+        if Sql.__verbose_execution__:
+            msg='Executing: {} {}'.format(sql, args)
+            logging.info(msg)
+
         return sql, args
 
     def _generate_delete(self):
@@ -564,12 +581,12 @@ class Sql:
     @property
     def extra_raw(self):
         """
-
+        Flattens self._raw_appened_values into usable form for executing.
         :return:
         """
         if self._raw_append_values is None:
             self._raw_append_values=[]
-        return '\n'.join(map(
+        return Sql.__sep__.join(map(
             lambda x: x[0],
             self._raw_append_values
         )), list(map(
@@ -601,7 +618,8 @@ class Sql:
             )
 
             if self.__verbose_generation__:
-                logging.warning('Generated: {}'.format(self._sql))
+                msg='Generated: {} {}'.format(*self._sql)
+                logging.info(msg)
         return self._sql
 
     def _generate_models(self, **results):
@@ -649,8 +667,9 @@ class Sql:
         self.gen()
         if self._result is None or not use_cache:
 
-            if self.__verbose_execution__:
-                logging.warning('Executing:', self._sql)
+            if Sql.__verbose_execution__:
+                msg='Executing: {} {}'.format(*self._sql)
+                logging.info(msg)
 
             with db.connect() as cursor:
                 cursor.execute(*self._sql)
@@ -700,6 +719,7 @@ class Sql:
         self._raw_append_values.append([
             sql, args
         ])
+        return self
 
     def WHERE(self, *specified_conditions, **conditions):
         """
@@ -787,6 +807,38 @@ class Sql:
         self._updates_values=kwargs
         return self
 
+    def GROUPBY(self, column_name):
+        """
+        you can add a group by here
+
+        * table name will be automatically resolved
+
+        :param column_name:
+        :return: self
+        """
+        if self._type not in ('SELECT',):
+            raise self.ExpressionError(
+                'Invalid Experssion Type'
+            )
+        self._group_by_column=column_name
+        return self
+
+    def ORDERBY(self, column_name):
+        """
+        add a orderby to expression
+
+        * table name will be automatically resolved
+
+        :param column_name:
+        :return: self
+        """
+        if self._type not in ('SELECT',):
+            raise self.ExpressionError(
+                'Invalid Experssion Type'
+            )
+        self._order_by_column=column_name
+        return self
+
     @staticmethod
     def DELETE(table):
         e=Sql()
@@ -833,5 +885,25 @@ class Sql:
     @staticmethod
     def SELECTFROM(table):
         """
+        Shortcut for SELECT('*').FROM('table')
         """
         return Sql.SELECT('*').FROM(table)
+
+    @staticmethod
+    def UNION(*expressions):
+        gens = [
+            e.gen()
+            for e in expressions
+        ]
+        sql=' UNION '.join(map(
+            lambda e: e[0],
+            gens
+        ))
+        args=list(sum(map(
+           lambda e: e[1],
+            gens
+        )))
+        return Sql.execute_raw(
+            sql, args
+        )
+

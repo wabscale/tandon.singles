@@ -1,6 +1,9 @@
 # from . import Sql
 from dataclasses import dataclass
+
 from scanf import scanf
+
+
 @dataclass
 class DataType:
     name: str=None
@@ -10,6 +13,7 @@ class DataType:
             self.name,
             length
         )
+
 
 class Integer(DataType):
     name: str='INT'
@@ -21,6 +25,7 @@ class Text(DataType):
 
 class DateTime(DataType):
     name: str='DATETIME'
+
 
 class Varchar(DataType):
     name: str='VARCHAR'
@@ -35,7 +40,7 @@ class Column:
     on_delete=None
 
     def __init__(self, data_type, **kwargs):
-        self.data_type = data_type
+        self.data_type=data_type
         default_attrs={
             'primary_key': False,
             'nullable'   : False,
@@ -54,7 +59,7 @@ class Column:
             self.foreign_table, self.foreign_column=scanf('%s.%s', self.references)
 
     def set_name(self, name):
-        self.name = name
+        self.name=name
         return self
 
     @property

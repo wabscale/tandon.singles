@@ -1,20 +1,21 @@
-from dataclasses import dataclass
-from datetime import datetime, timedelta
-from scanf import scanf
 import string
+from dataclasses import dataclass
+
+from scanf import scanf
 
 from . import BaseModel
+from . import Cache
 from ..app import db, app, logging
 
 
 class Table:
     column_info_sql='SELECT COLUMN_NAME, DATA_TYPE, COLUMN_KEY ' \
-        'FROM INFORMATION_SCHEMA.COLUMNS ' \
-        'WHERE TABLE_NAME=%s ' \
-        'AND TABLE_SCHEMA=DATABASE();'
+                    'FROM INFORMATION_SCHEMA.COLUMNS ' \
+                    'WHERE TABLE_NAME=%s ' \
+                    'AND TABLE_SCHEMA=DATABASE();'
     relationship_info_sql='SELECT TABLE_NAME ' \
-        'FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE ' \
-        'WHERE REFERENCED_TABLE_NAME=%s;'
+                          'FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE ' \
+                          'WHERE REFERENCED_TABLE_NAME=%s;'
 
     @dataclass
     class _Column:
@@ -86,6 +87,7 @@ class JoinedTable(Table):
 
     The sql generation is lazy
     """
+
     @dataclass
     class _JoinAttribute:
         name: str
@@ -97,10 +99,10 @@ class JoinedTable(Table):
     class JoinError(Exception):
         pass
 
-    ref_info_sql='SELECT COLUMN_NAME, REFERENCED_COLUMN_NAME '\
-                 'FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE '\
-                 'WHERE TABLE_NAME=%s '\
-                 'AND REFERENCED_TABLE_NAME=%s '\
+    ref_info_sql='SELECT COLUMN_NAME, REFERENCED_COLUMN_NAME ' \
+                 'FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE ' \
+                 'WHERE TABLE_NAME=%s ' \
+                 'AND REFERENCED_TABLE_NAME=%s ' \
                  'AND TABLE_SCHEMA=DATABASE();'
 
     def __init__(self, current_table, ref_table):
@@ -111,7 +113,7 @@ class JoinedTable(Table):
 
     @staticmethod
     def resolve_attribute(current_table, foreign_table):
-        raw = Sql.execute_raw(
+        raw=Sql.execute_raw(
             JoinedTable.ref_info_sql,
             (current_table, foreign_table,)
         )
@@ -149,15 +151,7 @@ class JoinedTable(Table):
         return self._gen()
 
 
-@dataclass
-class CachedQuery:
-    timestamp: datetime
-    result: list
-
-    @property
-    def valid(self):
-        timeout=app.config['SQL_CACHE_TIMEOUT']
-        return datetime.now() - self.timestamp < timedelta(seconds=timeout)
+__cache_enabled__=app.config['SQL_CACHE_ENABLED']
 
 
 class Sql:
@@ -185,8 +179,8 @@ class Sql:
     __sep__=' '
 
     __cache__={
-        'tables': {},
-        'queries': {}
+        'tables' : {},
+        'queries': Cache.QueryCache()
     }
 
     class ExpressionError(Exception):
@@ -219,22 +213,22 @@ class Sql:
         """
         Only needs to null out all the state attributes.
         """
-        self._type          =None
-        self._table         =None
-        self._sql           =None
-        self._attrs         =None
-        self._result        =None
+        self._type=None
+        self._table=None
+        self._sql=None
+        self._attrs=None
+        self._result=None
         self._raw_append_values=None
 
         # SELECT
-        self._columns       =None
-        self._joins         =None
-        self._conditions    =None
+        self._columns=None
+        self._joins=None
+        self._conditions=None
         self._group_by_column=None
         self._order_by_column=None
 
         # INSERT
-        self._insert_values =None
+        self._insert_values=None
 
         # UPDATE
         self._updates_values=None
@@ -356,7 +350,7 @@ class Sql:
         Will fill self._attributes with self._Attributes for
         self._table and joined tables.
         """
-        column_info_sql='SELECT COLUMN_NAME '\
+        column_info_sql='SELECT COLUMN_NAME ' \
                         'FROM INFORMATION_SCHEMA.COLUMNS ' \
                         'WHERE TABLE_NAME=%s ' \
                         'AND TABLE_SCHEMA=DATABASE();'
@@ -394,9 +388,9 @@ class Sql:
             )
             for attr, table, value, operator in self._conditions
         ), [
-            value if type(value) != bool else int(value)
-            for _, _, value, _ in self._conditions
-        ]) if self._conditions is not None else ('', [])
+                    value if type(value) != bool else int(value)
+                    for _, _, value, _ in self._conditions
+                ]) if self._conditions is not None else ('', [])
 
     def _generate_joins(self):
         """
@@ -533,7 +527,7 @@ class Sql:
         else:
             sql, args=Sql.SELECTFROM(self._table.name).gen()
             sql=sql[:-1]  # cut off
-            sql += Sql.__sep__ + 'WHERE {}=LAST_INSERT_ID()'.format(
+            sql+=Sql.__sep__ + 'WHERE {}=LAST_INSERT_ID()'.format(
                 str(self._table.primary_keys[0])
             )
         if Sql.__verbose_execution__:
@@ -605,7 +599,7 @@ class Sql:
                 'UPDATE': self._generate_update,
                 'DELETE': self._generate_delete,
             }[self._type]()
-            self._sql = (
+            self._sql=(
                 sql + raw_extra_sql + ';',
                 args + raw_extra_args,
             )
@@ -650,14 +644,14 @@ class Sql:
         ]
         return self._result
 
-    def first(self, use_cache=True):
+    def first(self, use_cache=__cache_enabled__):
         """
         :return: first element of results
         """
-        res = self.all(use_cache)
+        res=self.all(use_cache)
         return res[0] if len(res) != 0 else None
 
-    def all(self, use_cache=True):
+    def all(self, use_cache=__cache_enabled__):
         """
         This method should generate the sql, run it,
         then hand back the result (if expression type
@@ -675,14 +669,13 @@ class Sql:
         model for you.
         """
         self.gen()
-        if use_cache and hash(self) in Sql.__cache__['queries']:
-            cache_entry=Sql.__cache__['queries'][hash(self)]
-            if cache_entry.valid:
+        if use_cache:
+            result=Sql.__cache__['queries'][self]
+            if result is not None:
                 if Sql.__verbose_execution__:
-                    msg='Using Cache for: {} {}'.format(*self._sql)
+                    msg='Using Cache for: {}'.format(self._sql)
                     logging.info(msg)
-                return cache_entry.result
-            del Sql.__cache__['queries'][hash(self)]
+                return result
 
         if Sql.__verbose_execution__:
             msg='Executing: {} {}'.format(*self._sql)
@@ -692,8 +685,6 @@ class Sql:
             cursor.execute(*self._sql)
             result=list()
             if self._type in ('SELECT', 'INSERT'):
-                Model=self._resolve_model(self._table.name)
-
                 if self._type == 'INSERT':
                     cursor.fetchall()
                     sql=self._generate_insert_select()
@@ -704,10 +695,7 @@ class Sql:
 
                 result=self._generate_models(*cursor.fetchall())
 
-            Sql.__cache__['queries'][hash(self)]=CachedQuery(
-                result=result,
-                timestamp=datetime.now()
-            )
+            Sql.__cache__['queries'][self]=result
 
             return result
 
@@ -720,7 +708,7 @@ class Sql:
         return self.first()
 
     @staticmethod
-    def execute_raw(sql, args=None, use_cache=True):
+    def execute_raw(sql, args=None, use_cache=__cache_enabled__):
         """
         Will execute then give back all output rows.
 
@@ -728,13 +716,14 @@ class Sql:
         :param tuple args: iterable arguments
         :return:
         """
-        cache_id=hash('{}{}'.format(str(sql), str(args)))
-        if use_cache and cache_id in Sql.__cache__['queries']:
-            cached_query=Sql.__cache__['queries'][cache_id]
-            if cached_query.valid:
-                return cached_query.result
-            del Sql.__cache__['queries'][cache_id]
-
+        if use_cache:
+            cache_id='{}{}'.format(str(sql), str(args))
+            result=Sql.__cache__['queries'][cache_id]
+            if result is not None:
+                if Sql.__verbose_execution__:
+                    msg='Using Cache for: {} {}'.format(sql, args)
+                    logging.info(msg)
+                return result
         if Sql.__verbose_execution__:
             msg='Executing: {} {}'.format(sql, args)
             logging.info(msg)
@@ -742,11 +731,8 @@ class Sql:
             cursor.execute(sql, args)
             result=cursor.fetchall()
             Sql.__cache__['queries'][
-                hash('{}{}'.format(str(sql), str(args)))
-            ]=CachedQuery(
-                result=result,
-                timestamp=datetime.now()
-            )
+                '{}{}'.format(str(sql), str(args))
+            ]=result
             return result
 
     def WHERE(self, *specified_conditions, **conditions):
@@ -919,7 +905,7 @@ class Sql:
 
     @staticmethod
     def UNION(*expressions):
-        gens = [
+        gens=[
             e.gen()
             for e in expressions
         ]
@@ -928,10 +914,9 @@ class Sql:
             gens
         ))
         args=list(sum(map(
-           lambda e: e[1],
+            lambda e: e[1],
             gens
         )))
         return Sql.execute_raw(
             sql, args
         )
-

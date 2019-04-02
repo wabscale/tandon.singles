@@ -23,8 +23,12 @@ if not app.config['DEBUG']:
     logging.basicConfig(filename=os.path.join(
         app.config['LOG_DIR'],
         'orm_log.log'
-    ), filemode='w+')
-
+    ), filemode='w+', level='DEBUG')
+else:
+    logging.basicConfig(
+        format='%(message)s',
+        level='DEBUG'
+    )
 
 
 # register blueprints

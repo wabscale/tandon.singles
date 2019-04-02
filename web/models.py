@@ -6,16 +6,10 @@ import imghdr
 import time
 import os
 
-from .orm import Sql, BaseModel, utils, Query
+from .orm import Sql, utils, Query
 from .app import app
 
-
-class Person(BaseModel):
-    __table__='Person'
-
-
-class Photo(BaseModel):
-    __table__='Photo'
+class Photo:
 
     @staticmethod
     def create(image, owner, caption, all_followers):

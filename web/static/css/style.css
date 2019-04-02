@@ -30,3 +30,9 @@ navbar {
 .well {
     background-color: #505050;
 }
+
+img {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+}

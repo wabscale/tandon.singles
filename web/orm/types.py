@@ -1,7 +1,7 @@
 # from . import Sql
 from dataclasses import dataclass
+
 from scanf import scanf
-from datetime import datetime
 
 
 @dataclass
@@ -62,17 +62,19 @@ class Column:
     def __str__(self):
         return '`{}`.`{}`'.format(self.table_name, self.name)
 
-    def set_name(self, name):
-        self.name=name
+    def set_name(self, name, table_name):
+        self.name, self.table_name = name, table_name
         return self
 
     @staticmethod
     def resolve_type(type_name):
         return {
-            int: Integer,
-            str: Text,
-            datetime: DateTime
-        }[type_name]()
+            'int': Integer,
+            'tinyint': Integer,
+            'str': Text,
+            'varchar': Varchar(128),
+            'timestamp': DateTime,
+        }[type_name]
 
     @property
     def sql(self):
@@ -95,3 +97,13 @@ class Column:
                 self.on_delete
             ) if self.on_delete is not None else ''
         ) if self.references is not None else ''
+
+
+@dataclass
+class StaticColumn(Column):
+    def __init__(self, table_name, column_name, data_type, primary_key):
+        super(StaticColumn, self).__init__(
+            self.resolve_type(data_type),
+            primary_key=primary_key == 'PRI'
+        )
+        self.set_name(column_name, table_name)

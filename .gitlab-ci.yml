@@ -1,6 +1,6 @@
 stages:
   - deploy
-  
+
 deploy_ts:
   stage: deploy
   tags:

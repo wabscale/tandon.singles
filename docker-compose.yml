@@ -20,7 +20,7 @@ services:
     networks:
       - traefik-proxy
 
-  
+
   flasq:
     build: .
     restart: always

@@ -1,20 +1,20 @@
-from werkzeug.security import generate_password_hash, check_password_hash
-from flask_login import current_user
-
-import tempfile
 import hashlib
 import imghdr
-import time
 import os
+import tempfile
+import time
 
-from .orm import Sql, Query, BaseModel
+from werkzeug.security import generate_password_hash, check_password_hash
+
 from .app import app
+from .orm import Sql, Query, BaseModel
+
 
 class Photo(BaseModel):
     @property
     def image_link(self):
-        dir_name, image_name=os.path.split(self.filePath)
-        _, dir_name=os.path.split(dir_name)
+        dir_name, image_name = os.path.split(self.filePath)
+        _, dir_name = os.path.split(dir_name)
         return '/img/{}/{}'.format(dir_name, image_name)
 
     @staticmethod
@@ -27,28 +27,28 @@ class Photo(BaseModel):
         :return: new photo object
         """
 
-        filestream=image.data.stream
+        filestream = image.data.stream
         with tempfile.NamedTemporaryFile() as f:
             f.write(filestream.read())
             filestream.seek(0)
-            ext=imghdr.what(f.name)
+            ext = imghdr.what(f.name)
 
         if ext not in ('png', 'jpeg', 'gif'):
             # handle invalid file
             return ext
 
-        sha256=lambda s: hashlib.sha256(s.encode()).hexdigest()
+        sha256 = lambda s: hashlib.sha256(s.encode()).hexdigest()
 
-        filename='{}.{}'.format(sha256('{}{}{}{}'.format(
+        filename = '{}.{}'.format(sha256('{}{}{}{}'.format(
             str(time.time()), caption, owner, os.urandom(0x10)
         )), ext)
 
-        filedir=os.path.join(
+        filedir = os.path.join(
             app.config['UPLOAD_DIR'],
             sha256(owner),
         )
 
-        filepath=os.path.join(
+        filepath = os.path.join(
             filedir,
             filename
         )
@@ -89,7 +89,7 @@ class Photo(BaseModel):
 
         :return: [ Photo ]
         """
-        u=Query('Person').find(
+        u = Query('Person').find(
             username=username
         ).first()
         return u.photos
@@ -117,11 +117,12 @@ class User:
     Base user class. Just give it a username, and it will attempt
     to load its information out of the database.
     """
+
     def __init__(self, username):
-        self.username, self.password=(None,)*2
-        self.person=Query('Person').find(username=username).first()
+        self.username, self.password = (None,) * 2
+        self.person = Query('Person').find(username=username).first()
         if self.person is not None:
-            self.username, self.password=self.person.username, self.person.password
+            self.username, self.password = self.person.username, self.person.password
 
     def check_password(self, pword):
         return check_password_hash(self.password, pword) if self.username is not None else False
@@ -156,14 +157,13 @@ class User:
         :param str password:
         :return User: new User object
         """
-        password=generate_password_hash(password)
+        password = generate_password_hash(password)
         print(password)
         Sql.INSERT(
             username=username,
             password=password
         ).INTO('Person').do()
         return User(username)
-
 
 # p=Query(Photo).new(photoOwner='admin')
 # print(p)

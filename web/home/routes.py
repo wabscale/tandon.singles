@@ -1,11 +1,9 @@
-from flask import request, redirect, url_for, flash, render_template, Blueprint, send_from_directory
-from flask_login import current_user, login_user, logout_user, login_required
-import pymysql
+from flask import flash, render_template, Blueprint, send_from_directory
+from flask_login import current_user, login_required
 
 from .forms import PostForm
-
 from ..app import app
-from ..models import User, Photo
+from ..models import Photo
 
 home = Blueprint('home', __name__, url_prefix='/')
 
@@ -24,6 +22,7 @@ def index():
         form=form,
         photos=Photo.visible_to(current_user.username)
     )
+
 
 @home.route('/img/<path:path>')
 @login_required

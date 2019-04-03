@@ -13,6 +13,7 @@ login_manager.init_app(app)
 def load_user(username):
     return User(username)
 
+
 @login_manager.unauthorized_handler
 def unauthorized_callback():
     return redirect(url_for('auth.login'))

@@ -1,10 +1,11 @@
+import logging
+import os
+from datetime import datetime
+
+from flask import Flask
 from flask_bootstrap import Bootstrap
 from flask_wtf import CSRFProtect
 from flaskext.mysql import MySQL
-from datetime import datetime
-from flask import Flask
-import logging
-import os
 
 from .config import Config
 
@@ -30,7 +31,6 @@ else:
         level='DEBUG'
     )
 
-
 # register blueprints
 from .auth import auth
 from .users import users
@@ -41,7 +41,6 @@ list(map(app.register_blueprint, (
     auth,
     users
 )))
-
 
 if __name__ == '__main__':
     app.run(

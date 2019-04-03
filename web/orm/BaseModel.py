@@ -1,5 +1,6 @@
+from . import Query
 from . import Sql
-from . import Types as types
+from . import types
 from . import utils
 from ..app import app, logging
 
@@ -10,9 +11,9 @@ class BaseModel(object):
     to be the name of the table (along with any other convince
     methods).
     """
-    __column_info__: list=None
-    __relationships__: dict=None
-    primary_keys: list=None
+    __column_info__: list = None
+    __relationships__: dict = None
+    primary_keys: list = None
 
     class ModelError(Exception):
         pass
@@ -27,9 +28,9 @@ class BaseModel(object):
         """
 
         def __init__(self, model_obj, foreign_table):
-            self.model_obj=model_obj
-            self.foreign_table=Sql.Table(foreign_table)
-            self._objs=None
+            self.model_obj = model_obj
+            self.foreign_table = Sql.Table(foreign_table)
+            self._objs = None
 
         def __iter__(self):
             """
@@ -38,12 +39,12 @@ class BaseModel(object):
             """
 
             if self._objs is None:
-                ref, curr=Sql.JoinedTable.resolve_attribute(
+                ref, curr = Sql.JoinedTable.resolve_attribute(
                     self.foreign_table.name,
                     self.model_obj.__name__,
                 )
 
-                self._objs=Sql.Sql.SELECTFROM(
+                self._objs = Sql.Sql.SELECTFROM(
                     self.foreign_table.name
                 ).JOIN(self.model_obj.__name__).WHERE(
                     '{table}.{primarykey}={value}'.format(
@@ -61,19 +62,19 @@ class BaseModel(object):
 
         :param list args: list of data members for object in order they were created.
         """
-        table=Sql.Table(self.__name__)
-        self.__column_info__=table.columns
-        self.__relationships__=table.relationships
-        self.__lower_relationships__=list(map(
+        table = Sql.Table(self.__name__)
+        self.__column_info__ = table.columns
+        self.__relationships__ = table.relationships
+        self.__lower_relationships__ = list(map(
             lambda rel: rel.lower(),
             self.__relationships__
         ))
-        self.__column_lot__={
-            col.column_name: col
+        self.__column_lot__ = {
+            col.name: col
             for col in self.__column_info__
         }
 
-        self.primary_keys=list(filter(
+        self.primary_keys = list(filter(
             lambda column: column.primary_key,
             self.__column_info__
         ))
@@ -85,8 +86,8 @@ class BaseModel(object):
             self.__name__,
             '{{\n{}\n}}'.format(',\n'.join(
                 '    {:12}: {}'.format(
-                    col.column_name,
-                    str(self.__dict__[col.column_name])
+                    col.name,
+                    str(self.__dict__[col.name])
                 )
                 for col in self.__column_info__
             ))
@@ -95,7 +96,7 @@ class BaseModel(object):
     def __setattr__(self, key, value):
         if 'primary_keys' in self.__dict__ and key in self.__dict__['primary_keys']:
             raise self.__dict__['ModelError']('Unable to modify primary key value')
-        self.__dict__[key]=value
+        self.__dict__[key] = value
         # setattr(self, key, value)
 
     def __getattr__(self, item):
@@ -108,18 +109,49 @@ class BaseModel(object):
             # return super(BaseModel, self).__getattribute__(item)
         if self.__lower_relationships__ is not None:
             if item in self.__lower_relationships__:
-                self.__dict__[item]=self.Relationship(
+                self.__dict__[item] = self.Relationship(
                     self,
                     item[0].upper() + item[1:]
                 )
                 return self.__dict__[item]
             elif item.endswith('s') and item[:-1] in self.__lower_relationships__:
-                self.__dict__[item]=self.Relationship(
+                self.__dict__[item] = self.Relationship(
                     self,
                     item[0].upper() + item[1:-1]
                 )
                 return self.__dict__[item]
         return super(BaseModel, self).__getattribute__(item)
+
+    def update(self):
+        """
+        generate and execute sql to update object in db
+
+        ** This will rely on primary keys to update the object. If
+        primary keys are modified, this will likely crash.
+
+        :return:
+        """
+        Sql.Sql.UPDATE(self.__name__).SET(**{
+            col.name: self.__getattr__(col.name)
+            for col in self.__column_info__
+            if not col.primary_key
+        }).WHERE(**{
+            col.name: self.__getattr__(col.name)
+            for col in self.__column_info__
+            if col.primary_key
+        }).do()
+
+    def delete(self):
+        """
+        delete object from database
+
+        :return:
+        """
+        Sql.Sql.DELETE(self.__name__).WHERE(**{
+            col.name: self.__getattr__(col.name)
+            for col in self.__column_info__
+            if col.primary_key
+        }).do()
 
     def _generate_relationships(self):
         """
@@ -132,31 +164,31 @@ class BaseModel(object):
             )
 
     def __set_column_value(self, column_name, value):
-        col=self.__column_lot__[column_name]
+        col = self.__column_lot__[column_name]
         if value is not None:
             if col.data_type == 'timestamp' and type(value) == str:
-                value=utils.utils.strptime(value)
+                value = utils.strptime(value)
             elif col.data_type in ('int', 'tinyint'):
-                value=int(value)
-        self.__setattr__(col.column_name, value)
+                value = int(value)
+        self.__setattr__(col.name, value)
 
     def _set_state(self, **kwargs):
         for col in self.__column_info__:
-            self.__set_column_value(col.column_name, None)
+            self.__set_column_value(col.name, None)
         for col, val in kwargs.items():
             self.__set_column_value(col, val)
 
     @staticmethod
     def __gen_sql__(class_type):
-        columns=[
-            value.set_name(item)
+        columns = [
+            value.set_name(item, class_type.__name__)
             for item, value in class_type.__dict__.items()
             if isinstance(value, types.Column)
         ]
         if len(columns) == 0:
             return None
-        base='CREATE TABLE IF NOT EXISTS {table_name} (\n{columns}{refs}\n);'
-        sql=base.format(
+        base = 'CREATE TABLE IF NOT EXISTS {table_name} (\n{columns}{refs}\n);'
+        sql = base.format(
             table_name=class_type.__name__,
             columns=',\n'.join(
                 ' ' * 4 + column.sql
@@ -183,36 +215,9 @@ class BaseModel(object):
     def __dynamically_generated__(self):
         return len(self.__defined_columns__) > 0
 
-    def update(self):
-        """
-        generate and execute sql to update object in db
-
-        ** This will rely on primary keys to update the object. If
-        primary keys are modified, this will likely crash.
-
-        :return:
-        """
-        Sql.Sql.UPDATE(self.__name__).SET(**{
-            col.column_name: self.__getattr__(col.column_name)
-            for col in self.__column_info__
-            if not col.primary_key
-        }).WHERE(**{
-            col.column_name: self.__getattr__(col.column_name)
-            for col in self.__column_info__
-            if col.primary_key
-        }).do()
-
-    def delete(self):
-        """
-        delete object from database
-
-        :return:
-        """
-        Sql.Sql.DELETE(self.__name__).WHERE(**{
-            col.column_name: self.__getattr__(col.column_name)
-            for col in self.__column_info__
-            if col.primary_key
-        }).do()
+    @utils.classproperty
+    def query(cls):
+        return Query.Query(cls)
 
 
 class TempModel(BaseModel):
@@ -221,7 +226,7 @@ class TempModel(BaseModel):
     """
 
     def __init__(self, table_name, **kwargs):
-        self.__name__=table_name
+        self.__name__ = table_name
         super(TempModel, self).__init__(**kwargs)
 
     def __str__(self):
@@ -229,8 +234,8 @@ class TempModel(BaseModel):
             self.__name__,
             '{{\n{}\n}}'.format(',\n'.join(
                 '    {:12}: {}'.format(
-                    col.column_name,
-                    str(self.__dict__[col.column_name])
+                    col.name,
+                    str(self.__dict__[col.name])
                 )
                 for col in self.__column_info__
             ))

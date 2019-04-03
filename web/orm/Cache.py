@@ -14,7 +14,7 @@ class CachedQuery:
 
     @property
     def valid(self):
-        timeout=app.config['SQL_CACHE_TIMEOUT']
+        timeout = app.config['SQL_CACHE_TIMEOUT']
         return datetime.now() - self.timestamp < timedelta(seconds=timeout)
 
 
@@ -25,18 +25,18 @@ class QueryCache:
     """
 
     def __init__(self):
-        self.__data__={}
-        self.__access_counter__=0
+        self.__data__ = {}
+        self.__access_counter__ = 0
 
     def __getitem__(self, item):
         self.purge_if_necessary()
-        cache_id=self.gen_cache_id(item)
+        cache_id = self.gen_cache_id(item)
         return self.__data__[cache_id].result if cache_id in self.__data__ else None
 
     def __setitem__(self, key, value):
         self.purge_if_necessary()
-        cache_id=self.gen_cache_id(key)
-        self.__data__[cache_id]=CachedQuery(
+        cache_id = self.gen_cache_id(key)
+        self.__data__[cache_id] = CachedQuery(
             timestamp=datetime.now(),
             result=value
         )
@@ -52,7 +52,7 @@ class QueryCache:
         """
         if not self.time_to_purge:
             return
-        to_purge=[]
+        to_purge = []
         for cache_id, value in self.__data__.items():
             if not value.valid:
                 to_purge.append(cache_id)
@@ -68,5 +68,5 @@ class QueryCache:
         """
         Will return True every 10 time it is accessed
         """
-        self.__access_counter__+=1
+        self.__access_counter__ += 1
         return self.__access_counter__ % 10 == 0

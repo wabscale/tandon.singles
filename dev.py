@@ -1,4 +1,4 @@
-from web import app, db
+from web import app
 
 app.run(
     debug=True,

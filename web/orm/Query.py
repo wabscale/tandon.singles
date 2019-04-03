@@ -1,10 +1,10 @@
-from . import BaseModel, TempModel
+from . import BaseModel
 from . import Sql
 
 
 class Query(object):
     def __init__(self, table_name):
-        self.table_name=table_name if isinstance(table_name, str) else table_name.__name__
+        self.table_name = table_name if isinstance(table_name, str) else table_name.__name__
 
     def find(self, **conditions):
         """
@@ -40,10 +40,10 @@ class Query(object):
         :return:
         """
         for model_type in BaseModel.__subclasses__():
-            if model_type == TempModel:
+            if model_type == BaseModel.TempModel:
                 continue
-            raw=BaseModel.__gen_sql__(model_type)
+            raw = BaseModel.__gen_sql__(model_type)
             if raw is not None:
-                Sql.execute_raw(
+                Sql.Sql.execute_raw(
                     raw
                 )

@@ -1,9 +1,6 @@
-from flask import request, redirect, url_for, flash, render_template, Blueprint
+from flask import render_template, Blueprint
 from flask_login import current_user, login_required
 
-from .forms import *
-
-from ..app import app
 from ..models import User
 
 users = Blueprint('users', __name__, url_prefix='/users')

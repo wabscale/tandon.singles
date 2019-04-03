@@ -62,16 +62,17 @@ class Column:
     def __str__(self):
         return '`{}`.`{}`'.format(self.table_name, self.name)
 
-    def resolve_type(self, type_name):
+    def set_name(self, name):
+        self.name=name
+        return self
+
+    @staticmethod
+    def resolve_type(type_name):
         return {
             int: Integer,
             str: Text,
             datetime: DateTime
-        }[type_name]
-
-    def set_name(self, name):
-        self.name = name
-        return self
+        }[type_name]()
 
     @property
     def sql(self):

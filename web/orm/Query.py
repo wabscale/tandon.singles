@@ -1,5 +1,6 @@
-from . import Sql
 from . import BaseModel, TempModel
+from . import Sql
+
 
 class Query(object):
     def __init__(self, table_name):
@@ -12,7 +13,7 @@ class Query(object):
         :param conditions: list of conditions to find objects
         :return: Sql object
         """
-        return Sql.SELECTFROM(self.table_name).WHERE(**conditions)
+        return Sql.Sql.SELECTFROM(self.table_name).WHERE(**conditions)
 
     def new(self, **values):
         """
@@ -21,7 +22,7 @@ class Query(object):
         :param values: key value dict for obj
         :return: new instance of table model
         """
-        return Sql.INSERT(**values).INTO(self.table_name).do()
+        return Sql.Sql.INSERT(**values).INTO(self.table_name).do()
 
     def delete(self, **values):
         """
@@ -30,7 +31,7 @@ class Query(object):
         :param values:
         :return:
         """
-        return Sql.DELETE(self.table_name).WHERE(**values).do()
+        return Sql.Sql.DELETE(self.table_name).WHERE(**values).do()
 
     @staticmethod
     def create_all():

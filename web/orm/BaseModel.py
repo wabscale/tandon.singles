@@ -1,7 +1,7 @@
 from . import Sql
+from . import Types as types
 from . import utils
 from ..app import app, logging
-from . import Types as types
 
 
 class BaseModel(object):
@@ -103,7 +103,7 @@ class BaseModel(object):
         this is where relationships will be lazily resolved.
         :return:
         """
-        if item == '__name__': # boy this is a messy fix
+        if item == '__name__':  # boy this is a messy fix
             return self.__class__.__name__
             # return super(BaseModel, self).__getattribute__(item)
         if self.__lower_relationships__ is not None:

@@ -106,18 +106,19 @@ class BaseModel(object):
         if item == '__name__': # boy this is a messy fix
             return self.__class__.__name__
             # return super(BaseModel, self).__getattribute__(item)
-        if item in self.__lower_relationships__:
-            self.__dict__[item]=self.Relationship(
-                self,
-                item[0].upper() + item[1:]
-            )
-            return self.__dict__[item]
-        if item.endswith('s') and item[:-1] in self.__lower_relationships__:
-            self.__dict__[item]=self.Relationship(
-                self,
-                item[0].upper() + item[1:-1]
-            )
-            return self.__dict__[item]
+        if self.__lower_relationships__ is not None:
+            if item in self.__lower_relationships__:
+                self.__dict__[item]=self.Relationship(
+                    self,
+                    item[0].upper() + item[1:]
+                )
+                return self.__dict__[item]
+            elif item.endswith('s') and item[:-1] in self.__lower_relationships__:
+                self.__dict__[item]=self.Relationship(
+                    self,
+                    item[0].upper() + item[1:-1]
+                )
+                return self.__dict__[item]
         return super(BaseModel, self).__getattribute__(item)
 
     def _generate_relationships(self):
@@ -169,6 +170,18 @@ class BaseModel(object):
         if app.config['VERBOSE_SQL_GENERATION']:
             logging.warning('Generated: {}'.format(sql))
         return sql
+
+    @property
+    def __defined_columns__(self):
+        return [
+            value.set_name(item)
+            for item, value in self.__class__.__dict__.items()
+            if isinstance(value, types.Column)
+        ]
+
+    @property
+    def __dynamically_generated__(self):
+        return len(self.__defined_columns__) > 0
 
     def update(self):
         """

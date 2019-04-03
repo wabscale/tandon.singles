@@ -4,7 +4,9 @@ from scanf import scanf
 import string
 
 from . import BaseModel
+from . import Types
 from ..app import db, app, logging
+
 
 
 class Table:

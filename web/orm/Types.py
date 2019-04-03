@@ -1,46 +1,52 @@
 # from . import Sql
 from dataclasses import dataclass
 from scanf import scanf
+from datetime import datetime
+
+
 @dataclass
 class DataType:
-    name: str=None
+    name: str = None
 
     def __init__(self, length):
-        self.name='{}({})'.format(
+        self.name = '{}({})'.format(
             self.name,
             length
         )
 
+
 class Integer(DataType):
-    name: str='INT'
+    name: str = 'INT'
 
 
 class Text(DataType):
-    name: str='TEXT'
+    name: str = 'TEXT'
 
 
 class DateTime(DataType):
-    name: str='DATETIME'
+    name: str = 'DATETIME'
+
 
 class Varchar(DataType):
-    name: str='VARCHAR'
+    name: str = 'VARCHAR'
 
 
 class Column:
-    name: str=None
-    data_type: DataType=None
-    primary_key: bool=False
-    nullable=None
-    references=None
-    on_delete=None
+    name: str = None
+    data_type: DataType = None
+    primary_key: bool = False
+    table_name: str = None
+    nullable = None
+    references = None
+    on_delete = None
 
     def __init__(self, data_type, **kwargs):
         self.data_type = data_type
-        default_attrs={
+        default_attrs = {
             'primary_key': False,
-            'nullable'   : False,
-            'references' : None,
-            'on_delete'  : None,
+            'nullable': False,
+            'references': None,
+            'on_delete': None,
         }
 
         for default_name, default_value in default_attrs.items():
@@ -51,7 +57,17 @@ class Column:
                     else kwargs[default_name]
             )
         if self.references is not None:
-            self.foreign_table, self.foreign_column=scanf('%s.%s', self.references)
+            self.foreign_table, self.foreign_column = scanf('%s.%s', self.references)
+
+    def __str__(self):
+        return '`{}`.`{}`'.format(self.table_name, self.name)
+
+    def resolve_type(self, type_name):
+        return {
+            int: Integer,
+            str: Text,
+            datetime: DateTime
+        }[type_name]
 
     def set_name(self, name):
         self.name = name
@@ -59,7 +75,7 @@ class Column:
 
     @property
     def sql(self):
-        base='`{name}` {data_type}{primary_key}{nullable}'
+        base = '`{name}` {data_type}{primary_key}{nullable}'
         return base.format(
             name=self.name,
             data_type=self.data_type.name,
@@ -69,7 +85,7 @@ class Column:
 
     @property
     def ref_sql(self):
-        base='FOREIGN KEY ({name}) REFERENCES {foreign_table}({foreign_column}){on_delete}'
+        base = 'FOREIGN KEY ({name}) REFERENCES {foreign_table}({foreign_column}){on_delete}'
         return base.format(
             name=self.name,
             foreign_table=self.foreign_table,

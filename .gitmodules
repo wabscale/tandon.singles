@@ -1,0 +1,3 @@
+[submodule "bsql"]
+	path = bsql
+	url = git@gitlab.com:b1g_J/bsql.git

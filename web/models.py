@@ -13,6 +13,8 @@ from .orm import Sql, Query, BaseModel
 class Photo(BaseModel):
     @property
     def image_link(self):
+        if self.filePath is None:
+            return ''
         dir_name, image_name = os.path.split(self.filePath)
         _, dir_name = os.path.split(dir_name)
         return '/img/{}/{}'.format(dir_name, image_name)

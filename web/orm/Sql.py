@@ -677,7 +677,7 @@ class Sql:
                     if Sql.__verbose_execution__:
                         msg = 'Executing: {} {}'.format(*sql)
                         logging.info(msg)
-                    cursor.execute(sql)
+                    cursor.execute(*sql)
 
                 result = self._generate_models(*cursor.fetchall())
 

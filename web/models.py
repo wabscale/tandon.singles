@@ -5,6 +5,8 @@ import tempfile
 import time
 
 from werkzeug.security import generate_password_hash, check_password_hash
+from flask import flash
+from flask_login import current_user
 
 from .app import app
 from .orm import Sql, Query, BaseModel
@@ -20,7 +22,7 @@ class Photo(BaseModel):
         return '/img/{}/{}'.format(dir_name, image_name)
 
     @staticmethod
-    def create(image, owner, caption, all_followers):
+    def create(form): #image, owner, caption, all_followers):
         """
         :param image:
         :param owner:
@@ -29,7 +31,7 @@ class Photo(BaseModel):
         :return: new photo object
         """
 
-        filestream = image.data.stream
+        filestream = form.image.data.stream
         with tempfile.NamedTemporaryFile() as f:
             f.write(filestream.read())
             filestream.seek(0)
@@ -42,12 +44,15 @@ class Photo(BaseModel):
         sha256 = lambda s: hashlib.sha256(s.encode()).hexdigest()
 
         filename = '{}.{}'.format(sha256('{}{}{}{}'.format(
-            str(time.time()), caption, owner, os.urandom(0x10)
+            str(time.time()),
+            form.caption.data,
+            current_user.username,
+            os.urandom(0x10)
         )), ext)
 
         filedir = os.path.join(
             app.config['UPLOAD_DIR'],
-            sha256(owner),
+            sha256(current_user.username),
         )
 
         filepath = os.path.join(
@@ -57,14 +62,31 @@ class Photo(BaseModel):
 
         os.makedirs(filedir, exist_ok=True)
 
-        image.data.save(filepath)
+        form.image.data.save(filepath)
 
-        Query('Photo').new(
-            allFollowers=all_followers,
-            photoOwner=owner,
+        photo = Query('Photo').new(
+            allFollowers=form.public.data,
+            photoOwner=current_user.username,
             filePath=filepath,
-            caption=caption,
+            caption=form.caption.data,
         )
+
+        if form.group.data:
+            group=Query('CloseFriendGroup').find(
+                groupName=form.group.data
+            ).first()
+
+            if group.groupOwner != current_user.username and (group is None or not any(
+                    group.groupName == g.groupName
+                    for g in current_user.person.belongs
+            )):
+                flash('Unable to post to {}'.format(group.groupName))
+
+            Query('Share').new(
+                groupName=group.groupName,
+                groupOwner=group.groupOwner,
+                photoID=photo.photoID
+            )
 
     @staticmethod
     def owned_by(username):

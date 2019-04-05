@@ -4,7 +4,6 @@ from dataclasses import dataclass
 from scanf import scanf
 
 from . import BaseModel
-from . import Cache
 from . import types
 from ..app import db, app, logging
 
@@ -137,9 +136,6 @@ class JoinedTable(Table):
         return self._gen()
 
 
-__cache_enabled__ = app.config['SQL_CACHE_ENABLED']
-
-
 class Sql:
     """
     _type    : type of expression (select, insert, ...)
@@ -166,7 +162,6 @@ class Sql:
 
     __cache__ = {
         'tables': {},
-        'queries': Cache.QueryCache()
     }
 
     class ExpressionError(Exception):
@@ -392,7 +387,9 @@ class Sql:
         return ', '.join('`{column_table}`.`{column_name}`'.format(
             column_table=self._resolve_attribute(column_name),
             column_name=column_name
-        ) for column_name in self._columns) if self._columns != ['*'] else '*'
+        ) for column_name in self._columns) if self._columns != ['*'] else '`{}`.*'.format(
+            self._table
+        )
 
     def _generate_groupby(self):
         return Sql.__sep__ + 'GROUP BY `{table_name}`.`{column_name}`'.format(
@@ -630,14 +627,14 @@ class Sql:
         ]
         return self._result
 
-    def first(self, use_cache=__cache_enabled__):
+    def first(self):
         """
         :return: first element of results
         """
-        res = self.all(use_cache)
+        res = self.all()
         return res[0] if len(res) != 0 else None
 
-    def all(self, use_cache=__cache_enabled__):
+    def all(self, ):
         """
         This method should generate the sql, run it,
         then hand back the result (if expression type
@@ -655,13 +652,6 @@ class Sql:
         model for you.
         """
         self.gen()
-        if use_cache:
-            result = Sql.__cache__['queries'][self]
-            if result is not None:
-                if Sql.__verbose_execution__:
-                    msg = 'Using Cache for: {}'.format(self._sql)
-                    logging.info(msg)
-                return result
 
         if Sql.__verbose_execution__:
             msg = 'Executing: {} {}'.format(*self._sql)
@@ -681,8 +671,6 @@ class Sql:
 
                 result = self._generate_models(*cursor.fetchall())
 
-            Sql.__cache__['queries'][self] = result
-
             return result
 
     def do(self):
@@ -694,7 +682,7 @@ class Sql:
         return self.first()
 
     @staticmethod
-    def execute_raw(sql, args=None, use_cache=__cache_enabled__):
+    def execute_raw(sql, args=None):
         """
         Will execute then give back all output rows.
 
@@ -702,23 +690,12 @@ class Sql:
         :param tuple args: iterable arguments
         :return:
         """
-        if use_cache:
-            cache_id = '{}{}'.format(str(sql), str(args))
-            result = Sql.__cache__['queries'][cache_id]
-            if result is not None:
-                if Sql.__verbose_execution__:
-                    msg = 'Using Cache for: {} {}'.format(sql, args)
-                    logging.info(msg)
-                return result
         if Sql.__verbose_execution__:
             msg = 'Executing: {} {}'.format(sql, args)
             logging.info(msg)
         with db.connect() as cursor:
             cursor.execute(sql, args)
             result = cursor.fetchall()
-            Sql.__cache__['queries'][
-                '{}{}'.format(str(sql), str(args))
-            ] = result
             return result
 
     def WHERE(self, *specified_conditions, **conditions):

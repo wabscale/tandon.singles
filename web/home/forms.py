@@ -14,7 +14,7 @@ class PostForm(FlaskForm):
         widget=TextArea(),
         validators=[InputRequired()]
     )
-    groups = SelectField(
+    group = SelectField(
         'Friend Group',
         validators=[]
     )

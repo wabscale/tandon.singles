@@ -49,6 +49,7 @@ $(document).ready(function () {
     $('.group-delete').click(function () {
         let form = createForm(this);
         form.append($('<input type="hidden" name="action" value="delete"/>'));
+
         form.appendTo('body').submit();
     });
 });

@@ -26,6 +26,7 @@
           <img src="{{ photo.image_link }}" class="m-5" alt="{{ photo.photoOwner }}">
 
           <div class="card-body">
+            <small>{{ photo.timestamp }}</small>
             <h4>{{ photo.photoOwner }}</h4>
             <p class="card-text">{{ photo.caption }}</p>
             <button data-toggle="collapse" data-target="#photo-comments-{{ photo.photoID }}"

@@ -13,7 +13,7 @@
     <tbody>
     {% for update_form in update_forms %}
       <tr>
-{#        {{ update_form.id }}#}
+        {{ update_form.id }}
         <td>
           {{ render_field(update_form.group_name, form_type='inline', readonly=True) }}
         </td>

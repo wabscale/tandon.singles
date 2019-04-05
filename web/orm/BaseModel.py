@@ -65,10 +65,10 @@ class BaseModel(object):
         table = Sql.Table(self.__name__)
         self.__column_info__ = table.columns
         self.__relationships__ = table.relationships
-        self.__lower_relationships__ = list(map(
-            lambda rel: rel.lower(),
-            self.__relationships__
-        ))
+        self.__lower_relationships__ = {
+            rel.lower(): rel
+            for rel in self.__relationships__
+        }
         self.__column_lot__ = {
             col.name: col
             for col in self.__column_info__
@@ -111,13 +111,13 @@ class BaseModel(object):
             if item in self.__lower_relationships__:
                 self.__dict__[item] = self.Relationship(
                     self,
-                    item[0].upper() + item[1:]
+                    self.__lower_relationships__[item]
                 )
                 return self.__dict__[item]
             elif item.endswith('s') and item[:-1] in self.__lower_relationships__:
                 self.__dict__[item] = self.Relationship(
                     self,
-                    item[0].upper() + item[1:-1]
+                    self.__lower_relationships__[item[:-1]]
                 )
                 return self.__dict__[item]
         return super(BaseModel, self).__getattribute__(item)

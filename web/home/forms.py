@@ -1,5 +1,5 @@
 from flask_wtf import FlaskForm
-from wtforms.fields import StringField, SubmitField, FileField, BooleanField
+from wtforms.fields import StringField, SubmitField, FileField, BooleanField, SelectField
 from wtforms.validators import DataRequired, InputRequired
 from wtforms.widgets import TextArea
 
@@ -12,6 +12,10 @@ class PostForm(FlaskForm):
     caption = StringField(
         'Caption',
         widget=TextArea(),
+        validators=[InputRequired()]
+    )
+    groups = SelectField(
+        'Friend Group',
         validators=[InputRequired()]
     )
     public = BooleanField(

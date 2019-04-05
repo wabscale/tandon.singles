@@ -35,11 +35,13 @@ else:
 from .auth import auth
 from .users import users
 from .home import home
+from .groups import groups
 
 list(map(app.register_blueprint, (
     home,
     auth,
-    users
+    users,
+    groups
 )))
 
 if __name__ == '__main__':

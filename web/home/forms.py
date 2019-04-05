@@ -16,7 +16,7 @@ class PostForm(FlaskForm):
     )
     groups = SelectField(
         'Friend Group',
-        validators=[InputRequired()]
+        validators=[]
     )
     public = BooleanField(
         'Public post',

@@ -12,11 +12,15 @@ home = Blueprint('home', __name__, url_prefix='/')
 @login_required
 def index():
     form = PostForm()
-    form.groups.choices=['---']
-    groups=current_user.person.closefriendgroups
-    if groups is not None:
-        form.groups.choices.extend(groups)
-        print(form.groups)
+    form.groups.choices = [('', '---')]
+    form.groups.choices.extend(map(
+        lambda belongs: (
+            belongs.closefriendsgroups[0].groupName,
+            belongs.closefriendsgroups[0].groupName,
+        ),
+        current_user.person.belongs
+    ))
+
     if form.validate_on_submit():
         ext = Photo.create(form.image, current_user.username, form.caption.data, form.public.data)
         if ext is not None:

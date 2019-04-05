@@ -1,3 +1,5 @@
+import string
+
 import pymysql
 from flask import redirect, url_for, flash, render_template, Blueprint
 from flask_login import current_user, login_user, logout_user, login_required
@@ -7,6 +9,17 @@ from ..app import app
 from ..models import User
 
 auth = Blueprint('auth', __name__, url_prefix='/auth')
+
+
+class InvalidUsername(Exception):
+    pass
+
+
+def check_username(username):
+    return all(
+        c in string.ascii_letters or c in string.digits or c in '!#$&*+-.:<=>?@[]^_|~'
+        for c in username
+    )
 
 
 @auth.route('/register', methods=['GET', 'POST'])
@@ -23,11 +36,18 @@ def register():
 
     if form.validate_on_submit():
         try:
+            if not check_username(form.username.data):
+                raise InvalidUsername()
             u = User.create(form.username.data, form.password.data)
             login_user(u)
             return redirect(url_for('home.index'))
         except pymysql.err.IntegrityError:
             flash('Username already in use')
+        except InvalidUsername:
+            flash('{} contains invalid characters'.format(
+                form.username.data
+            ))
+
     return render_template(
         'auth/register.html',
         form=form,

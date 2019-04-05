@@ -113,13 +113,13 @@ class BaseModel(object):
                     self,
                     self.__lower_relationships__[item]
                 )
-                return self.__dict__[item]
+                return list(self.__dict__[item])
             elif item.endswith('s') and item[:-1] in self.__lower_relationships__:
                 self.__dict__[item] = self.Relationship(
                     self,
                     self.__lower_relationships__[item[:-1]]
                 )
-                return self.__dict__[item]
+                return list(self.__dict__[item])
         return super(BaseModel, self).__getattribute__(item)
 
     def update(self):

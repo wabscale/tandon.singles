@@ -1,0 +1,3 @@
+[submodule "bigsql"]
+	path = bigsql
+	url = git@gitlab.com:b1g_J/bigsql.git

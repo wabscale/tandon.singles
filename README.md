@@ -66,9 +66,21 @@ db = big_SQL(
 
 db.create_all()
 
+# to query then modify an object
 t = Test.query.find(a_string='a string').first()
 
 t.date = datetime.now()
+
+try:
+    db.session.commit()
+except big_ERROR as e:
+    print('onooooooz', e)
+    db.session.rollback()
+    
+# To delete an object:
+t = Test.query.find(a_string='another string').first()
+
+db.session.delete(t)
 
 try:
     db.session.commit()
@@ -88,11 +100,11 @@ If you already have a database with tables defined, you can
 just query existing tables, and bigsql will generate models for you.
 
 #### Relationships
-If you have a definded foreign key relationship with another table 
+If you have a defined foreign key relationship with another table 
 already defined, you don't need to tell bigsql about them. For an object 
 with foreign models, you can just access it as a attribute, and it will 
-hand you a list of all objects (either dynamically or statically generated)
-associated with the object. 
+hand you an iterable object with all the associated object for the 
+current model (either dynamically or statically generated).
 
 For example:
 
@@ -125,14 +137,24 @@ db = big_SQL(
     db='DB',
 )
 
+# new_photo will be a dynamically generated model object
 admin = db.query('Person').new(username='admin')
 # new_photo will be a dynamically generated model object
 new_photo = db.query('Photo').new(photoOwner='admin')
 
+db.session.add(admin)
+db.session.add(new_photo)
+
+try:
+    db.session.commit()
+except big_ERROR as e:
+    print('onooooooz', e)
+    db.session.rollback()
+
 # the relationship will be detected between Photo and Person, 
 # so you can access either .photo or .photos on a Person object
 # and you will get all the associated photos for this user as a list
-admins_photos = admin.photos
+admins_photos = list(admin.photos)
 ```
 
 ### Sql Engine

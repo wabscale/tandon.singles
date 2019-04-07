@@ -11,7 +11,7 @@ login_manager.init_app(app)
 
 @login_manager.user_loader
 def load_user(username):
-    return User(username)
+    return User.get(username)
 
 
 @login_manager.unauthorized_handler

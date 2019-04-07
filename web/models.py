@@ -10,6 +10,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 
 import bigsql
 from .app import app, db
+from . import home
 
 
 class Photo(bigsql.DynamicModel):
@@ -122,7 +123,10 @@ class Photo(bigsql.DynamicModel):
         u=db.query('Person').find(
             username=username
         ).first()
-        return list(u.photos)
+        return list(sorted(u.photos, key=lambda x: x.timestamp, reverse=True))
+
+    def delete_form(self):
+        return home.forms.DeleteForm.populate(self)
 
 
 class User:
@@ -150,7 +154,7 @@ class User:
         return self.person is None
 
     def get_id(self):
-        return self.username
+        return None if self.person is None else self.username
 
     def get_owned_photos(self):
         """
@@ -171,7 +175,6 @@ class User:
         :return User: new User object
         """
         password=generate_password_hash(password)
-        print(password)
         u=db.query('Person').new(
             username=username,
             password=password
@@ -182,3 +185,8 @@ class User:
         except bigsql.big_ERROR:
             db.session.rollback()
         return User(u.username)
+
+    @staticmethod
+    def get(username):
+        u=User(username)
+        return u if u.person is not None else None

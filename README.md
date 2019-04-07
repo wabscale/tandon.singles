@@ -4,12 +4,12 @@
 
 A proud [flasq](https://gitlab.com/b1g_J/flasq) app.
 
-# big_SQL
-
-This project didn't seem particularly interesting, so I implemented my own custom ORM to make it more Spicy. 
+### ORM
+This project didn't seem particularly interesting, so I implemented my own custom ORM to make it more spicy. 
 It features dynamic model creation, with on the fly relationship detection and resolution. 
 It uses an SQL query generator engine that I also implemented for this project.
 
+# big_SQL
 big_SQL is an ORM features dynamic model generation, with on the fly relationship detection and resolution. 
 It uses a high level custom sql generator in its backend.
 

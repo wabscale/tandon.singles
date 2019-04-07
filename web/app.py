@@ -5,7 +5,7 @@ from datetime import datetime
 from flask import Flask
 from flask_bootstrap import Bootstrap
 from flask_wtf import CSRFProtect
-from flaskext.mysql import MySQL
+import bigsql
 
 from .config import Config
 
@@ -18,7 +18,14 @@ app.config.from_object(Config())
 
 Bootstrap(app)
 CSRFProtect(app)
-db = MySQL(app)
+db = bigsql.big_SQL(
+    user=app.config['MYSQL_DATABASE_USER'],
+    pword=app.config['MYSQL_DATABASE_PASSWORD'],
+    db=app.config['MYSQL_DATABASE_DB'],
+    host=app.config['MYSQL_DATABASE_HOST'],
+    VERBOSE_SQL_EXECUTION=app.config['VERBOSE_SQL_EXECUTION'],
+    # DB_LOG_FILE=app.config['DB_LOG_FILE']
+)
 
 if not app.config['DEBUG']:
     logging.basicConfig(filename=os.path.join(

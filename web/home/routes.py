@@ -2,9 +2,8 @@ from flask import flash, render_template, Blueprint, send_from_directory
 from flask_login import current_user, login_required
 
 from .forms import PostForm
-from ..app import app
+from ..app import app, db
 from ..models import Photo
-from ..orm import Query
 
 home = Blueprint('home', __name__, url_prefix='/')
 
@@ -16,7 +15,7 @@ def index():
     form.group.choices = [('', '---')]
     form.group.choices.extend(
         (group.groupName,)*2
-        for group in Query('CloseFriendGroup').find(
+        for group in db.query('CloseFriendGroup').find(
             groupOwner=current_user.username
         ).all()
     )

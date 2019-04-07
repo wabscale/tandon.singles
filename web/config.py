@@ -16,8 +16,6 @@ class Config:
 
     VERBOSE_SQL_GENERATION = False
     VERBOSE_SQL_EXECUTION = True
-    SQL_CACHE_TIMEOUT = 5
-    SQL_CACHE_ENABLED = True
 
     UPLOAD_DIR = os.path.join(os.getcwd(), '.data/uploads')
     LOG_DIR = os.path.join(os.getcwd(), '.data/log')

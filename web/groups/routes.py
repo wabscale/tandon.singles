@@ -1,9 +1,10 @@
 from flask import render_template, Blueprint, request, flash, redirect
 from flask_login import login_required, current_user
 import pymysql.err
+import bigsql
 
 from .forms import UpdateGroupForm, NewGroupForm, AddMemberForm, UpdateMemberForm
-from ..orm import Query
+from ..app import db
 
 groups=Blueprint('groups', __name__, url_prefix='/groups')
 
@@ -13,17 +14,27 @@ def handle_update_group(update_form):
 
 
 def handle_delete_group(update_form):
-    Query('CloseFriendGroup').find(
+    cfg = db.query('CloseFriendGroup').find(
         groupName=update_form.id.data
-    ).first().delete()
+    )
+    db.session.delete(cfg)
+    try:
+        db.session.commit()
+    except bigsql.big_ERROR:
+        db.session.rollback()
 
 
 def handle_new_group(new_form):
     if new_form.validate_on_submit():
-        Query('CloseFriendGroup').new(
+        cfg = db.query('CloseFriendGroup').new(
             groupName=new_form.group_name.data,
             groupOwner=current_user.username
         )
+        db.session.add(cfg)
+        try:
+            db.session.commit()
+        except bigsql.big_ERROR:
+            db.session.rollback()
 
 
 def handle_update_member(update_form):
@@ -101,7 +112,7 @@ def view():
     ]
     new_form.members.choices.extend(
         (follower.followeeUsername,)*2
-        for follower in Query('Follow').find(
+        for follower in db.query('Follow').find(
             followerUsername=current_user.username
         ).all()
     )
@@ -129,7 +140,7 @@ def view():
             b.username,
             group_name
         )
-        for b in Query('CloseFriendGroup').find(
+        for b in db.query('CloseFriendGroup').find(
             groupName=group_name
         ).first().belongs
     )

@@ -4,25 +4,25 @@ import os
 import tempfile
 import time
 
-from werkzeug.security import generate_password_hash, check_password_hash
 from flask import flash
 from flask_login import current_user
+from werkzeug.security import generate_password_hash, check_password_hash
 
-from .app import app
-from .orm import Sql, Query, BaseModel
+import bigsql
+from .app import app, db
 
 
-class Photo(BaseModel):
+class Photo(bigsql.DynamicModel):
     @property
     def image_link(self):
         if self.filePath is None:
             return ''
-        dir_name, image_name = os.path.split(self.filePath)
-        _, dir_name = os.path.split(dir_name)
+        dir_name, image_name=os.path.split(self.filePath)
+        _, dir_name=os.path.split(dir_name)
         return '/img/{}/{}'.format(dir_name, image_name)
 
     @staticmethod
-    def create(form): #image, owner, caption, all_followers):
+    def create(form):
         """
         :param image:
         :param owner:
@@ -31,31 +31,31 @@ class Photo(BaseModel):
         :return: new photo object
         """
 
-        filestream = form.image.data.stream
+        filestream=form.image.data.stream
         with tempfile.NamedTemporaryFile() as f:
             f.write(filestream.read())
             filestream.seek(0)
-            ext = imghdr.what(f.name)
+            ext=imghdr.what(f.name)
 
         if ext not in ('png', 'jpeg', 'gif'):
             # handle invalid file
             return ext
 
-        sha256 = lambda s: hashlib.sha256(s.encode()).hexdigest()
+        sha256=lambda s: hashlib.sha256(s.encode()).hexdigest()
 
-        filename = '{}.{}'.format(sha256('{}{}{}{}'.format(
+        filename='{}.{}'.format(sha256('{}{}{}{}'.format(
             str(time.time()),
             form.caption.data,
             current_user.username,
             os.urandom(0x10)
         )), ext)
 
-        filedir = os.path.join(
+        filedir=os.path.join(
             app.config['UPLOAD_DIR'],
             sha256(current_user.username),
         )
 
-        filepath = os.path.join(
+        filepath=os.path.join(
             filedir,
             filename
         )
@@ -64,7 +64,7 @@ class Photo(BaseModel):
 
         form.image.data.save(filepath)
 
-        photo = Query('Photo').new(
+        photo=db.query('Photo').new(
             allFollowers=form.public.data,
             photoOwner=current_user.username,
             filePath=filepath,
@@ -72,7 +72,7 @@ class Photo(BaseModel):
         )
 
         if form.group.data:
-            group=Query('CloseFriendGroup').find(
+            group=db.query('CloseFriendGroup').find(
                 groupName=form.group.data
             ).first()
 
@@ -82,11 +82,17 @@ class Photo(BaseModel):
             )):
                 flash('Unable to post to {}'.format(group.groupName))
 
-            Query('Share').new(
+            db.query('Share').new(
                 groupName=group.groupName,
                 groupOwner=group.groupOwner,
                 photoID=photo.photoID
             )
+        try:
+            db.session.commit()
+            return True
+        except bigsql.big_ERROR:
+            db.session.rollback()
+            return False
 
     @staticmethod
     def owned_by(username):
@@ -99,9 +105,9 @@ class Photo(BaseModel):
             ...
         ]
         """
-        return [
-            Sql.SELECTFROM('Photos').WHERE(owner=username)
-        ]
+        return db.query('Photo').find(
+            photoOwner=username
+        ).all()
 
     @staticmethod
     def visible_to(username):
@@ -113,27 +119,10 @@ class Photo(BaseModel):
 
         :return: [ Photo ]
         """
-        u = Query('Person').find(
+        u=db.query('Person').find(
             username=username
         ).first()
-        return u.photos
-        # return sorted(list(
-        #     # photos that are in close friend groups that username is in
-        #     Sql.SELECTFROM('Photos').JOIN('Share', 'CloseFriendGroup', 'Belong').WHERE(
-        #         username=username
-        #     )
-        # ) + list(
-        #     # subscibed photos
-        #     Sql.SELECTFROM('Photos').JOIN('Follow').WHERE(
-        #         followeeUsername=username,
-        #         acceptedfollow=True
-        #     )
-        # ) + list(
-        #     # users photos
-        #     Sql.SELECTFROM('Photos').JOIN('Person').WHERE(
-        #         username=username
-        #     )
-        # ), key=lambda photo: photo.timestamp)
+        return list(u.photos)
 
 
 class User:
@@ -143,10 +132,10 @@ class User:
     """
 
     def __init__(self, username):
-        self.username, self.password = (None,) * 2
-        self.person = Query('Person').find(username=username).first()
+        self.username, self.password=(None,) * 2
+        self.person=db.query('Person').find(username=username).first()
         if self.person is not None:
-            self.username, self.password = self.person.username, self.person.password
+            self.username, self.password=self.person.username, self.person.password
 
     def check_password(self, pword):
         return check_password_hash(self.password, pword) if self.username is not None else False
@@ -181,24 +170,15 @@ class User:
         :param str password:
         :return User: new User object
         """
-        password = generate_password_hash(password)
+        password=generate_password_hash(password)
         print(password)
-        Sql.INSERT(
+        u=db.query('Person').new(
             username=username,
             password=password
-        ).INTO('Person').do()
-        return User(username)
-
-# p=Query(Photo).new(photoOwner='admin')
-# print(p)
-
-# print(app.config['MYSQL_DATABASE_HOST'])
-# User.create('admin', 'password')
-# p=Query(Person).find(username='admin').first()
-# print(list(p.photos))
-# print(User('admin'))
-# p=Sql.SELECTFROM('Person').WHERE(username='admin').execute()[0]
-# print(p.photos)
-# print(Sql.UPDATE('Photo').SET(photoID=1).WHERE(photoID=2).gen())
-# print(*Sql.SELECT('username').FROM('Person').WHERE(username='j'))
-# print(e.INSERT(username='d',password='pwrod').INTO('Person').execute())
+        )
+        db.session.add(u)
+        try:
+            db.session.commit()
+        except bigsql.big_ERROR:
+            db.session.rollback()
+        return User(u.username)

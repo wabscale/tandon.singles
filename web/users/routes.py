@@ -11,7 +11,7 @@ users = Blueprint('users', __name__, url_prefix='/users')
 def view_user(username):
     if current_user.is_authenticated():
         pass
-    photos = User(username).get_photos()
+    photos = list(User(username).person.photos)
     return render_template(
         'users/view.html',
         photos=photos

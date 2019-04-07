@@ -16,7 +16,7 @@ def handle_update_group(update_form):
 def handle_delete_group(update_form):
     cfg = db.query('CloseFriendGroup').find(
         groupName=update_form.id.data
-    )
+    ).first()
     db.session.delete(cfg)
     try:
         db.session.commit()

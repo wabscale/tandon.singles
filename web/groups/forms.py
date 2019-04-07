@@ -43,6 +43,7 @@ class AddMemberForm(FlaskForm):
         default=('', '---'),
         validators=[DataRequired()]
     )
+    submit = SubmitField('Submit')
 
 
 class NewGroupForm(FlaskForm):

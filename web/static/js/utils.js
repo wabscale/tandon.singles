@@ -10,8 +10,8 @@ $(document).ready(function () {
     }
 });
 
-function createForm(o) {
-    let tr = $(o).closest('tr');
+function createForm(o, outter='tr') {
+    let tr = $(o).closest(outter);
     let form = $('<form method="POST"></form>');
     form.append(tr.find('input[name="id"]'));
     let hidden_csrf = $('<input type="hidden" name="csrf_token"/>');
@@ -49,7 +49,20 @@ $(document).ready(function () {
     $('.group-delete').click(function () {
         let form = createForm(this);
         form.append($('<input type="hidden" name="action" value="delete"/>'));
+        form.appendTo('body').submit();
+    });
 
+    $('.photo-delete').click(function () {
+        let form = createForm(this, 'span');
+        form.append($('<input type="hidden" name="action" value="delete"/>'));
+        form.appendTo('body').submit();
+    });
+
+    $('.comment-post').click(function () {
+        let form = createForm(this, '#modalCommentForm');
+        let outter = $(this).closest('#modalCommentForm');
+        form.append(outter.find('textarea[name="content"]'));
+        form.append($('<input type="hidden" name="action" value="comment"/>'));
         form.appendTo('body').submit();
     });
 });

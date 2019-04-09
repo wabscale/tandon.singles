@@ -123,10 +123,61 @@ class Photo(bigsql.DynamicModel):
         u=db.query('Person').find(
             username=username
         ).first()
-        return list(sorted(u.photos, key=lambda x: x.timestamp, reverse=True))
 
+        photos = []
+        photos.extend(u.photos)
+        photos.extend(
+            cfg.photos
+            for cfg in CloseFriendGroup.find_groups(u)
+        )
+        photos.extend(
+            f.public_photos
+            for f in u.follow
+        )
+
+        return list(sorted(
+            u.photos,
+            key=lambda x: x.timestamp,
+            reverse=True
+        ))
+
+    @property
     def delete_form(self):
         return home.forms.DeleteForm.populate(self)
+
+    @property
+    def comment_form(self):
+        return home.forms.CommentForm.populate(self)
+
+
+
+class CloseFriendGroup(bigsql.DynamicModel):
+    @property
+    def photos(self):
+        return [
+            share.photo
+            for share in self.shares
+        ]
+
+    @staticmethod
+    def find_groups(person):
+        return [
+            b.closefriendgroup[0]
+            for b in person.belongs
+        ] + [
+            cfg
+            for cfg in person.closefriendgroup
+        ]
+
+
+class Person(bigsql.DynamicModel):
+    @property
+    def public_photos(self):
+        return [
+            photo
+            for photo in self.photos
+            if not photo.isPrivate
+        ]
 
 
 class User:

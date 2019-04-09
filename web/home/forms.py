@@ -5,6 +5,11 @@ from wtforms.widgets import TextArea
 
 
 class PostForm(FlaskForm):
+    action=HiddenField(
+        'post',
+        default='post',
+        validators=[DataRequired()]
+    )
     image = FileField(
         'Image',
         validators=[DataRequired()]
@@ -32,7 +37,7 @@ class DeleteForm(FlaskForm):
         default='delete',
         validators=[DataRequired()]
     )
-    photoid=HiddenField(
+    id=HiddenField(
         'photoID',
         validators=[DataRequired()]
     )
@@ -40,4 +45,28 @@ class DeleteForm(FlaskForm):
     @staticmethod
     def populate(photo):
         form=DeleteForm()
-        form.photoid.data=photo.photoID
+        form.id.data=photo.photoID
+        return form
+
+
+class CommentForm(FlaskForm):
+    id=HiddenField(
+        'photoID',
+        validators=[DataRequired()]
+    )
+    action=HiddenField(
+        'comment',
+        default='comment',
+        validators=[DataRequired()]
+    )
+    content=StringField(
+        'content',
+        widget=TextArea(),
+        validators=[InputRequired()]
+    )
+
+    @staticmethod
+    def populate(photo):
+        form=CommentForm()
+        form.id.data=photo.photoID
+        return form

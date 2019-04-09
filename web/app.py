@@ -40,14 +40,14 @@ else:
 
 # register blueprints
 from .auth import auth
-from .users import users
+from .users import user
 from .home import home
 from .groups import groups
 
 list(map(app.register_blueprint, (
     home,
     auth,
-    users,
+    user,
     groups
 )))
 

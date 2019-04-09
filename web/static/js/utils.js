@@ -65,5 +65,11 @@ $(document).ready(function () {
         form.append($('<input type="hidden" name="action" value="comment"/>'));
         form.appendTo('body').submit();
     });
+
+    $('.follow-user').click(function () {
+        let form = createForm(this, 'div');
+        form.append($('<input type="hidden" name="action" value="follow"/>'));
+        form.appendTo('body').submit();
+    });
 });
 

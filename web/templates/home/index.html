@@ -1,5 +1,4 @@
 {% extends 'base.html' %}
-{% from "photo.html" import render_photo %}
 
 {% block content %}
   <div class="container-fluid">
@@ -18,9 +17,6 @@
     </div>
     <br>
 
-    {# posts to see #}
-    {% for photo in photos %}
-      {{ render_photo(photo, current_user) }}
-    {% endfor %}
+    {{ render_photos(photos, current_user) }}
   </div>
 {% endblock %}

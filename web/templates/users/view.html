@@ -1,15 +1,35 @@
 {% extends "base.html" %}
 
-{% block content %}
-  <div class="card-columns">
-    {% for photo in photos %}
-      <div class="card">
-        <img class="img-fluid" src="/user/{{ photo.owner }}/img/{{ photo.filepath }}">
-        <div class="card-body">
-          <h4 class="card-title">{{ photo.caption }}</h4>
-          <a href="/user/{{ photo.owner }}/view/{{ photo.filepath }}" class="btn btn-primary">View</a>
-        </div>
+{% macro render_user(person, current_user) %}
+  <div class="offset-md-5 col-md-2">
+    <div class="card">
+      <h3 class="text-center m-3">
+        {{ person.username }}
+      </h3>
+      <div class="card-body text-center">
+        {% set follow_form = person.follow_form %}
+        {{ follow_form.id }}
+        {% if current_user.username == person.username %}
+        {% elif not current_user.follows(person) %}
+          <btn type="button" class="btn btn-outline-success follow-user">Follow</btn>
+        {% else %}
+          {{ follow_form.id }}
+          <btn type="button" class="btn btn-outline-danger follow-user">Unfollow</btn>
+        {% endif %}
       </div>
-    {% endfor %}
+    </div>
+  </div>
+  <br>
+{% endmacro %}
+
+{% block content %}
+  <div class="container-fluid">
+    {{ render_user(person, current_user) }}
+
+    {% set visible = current_user.follows(person) or not person.isPrivate %}
+
+    {% if visible %}
+      {{ render_photos(photos, current_user) }}
+    {% endif %}
   </div>
 {% endblock %}

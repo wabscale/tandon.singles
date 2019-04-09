@@ -11,6 +11,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 import bigsql
 from .app import app, db
 from . import home
+from . import users
 
 
 class Photo(bigsql.DynamicModel):
@@ -172,12 +173,8 @@ class CloseFriendGroup(bigsql.DynamicModel):
 
 class Person(bigsql.DynamicModel):
     @property
-    def public_photos(self):
-        return [
-            photo
-            for photo in self.photos
-            if not photo.isPrivate
-        ]
+    def follow_form(self):
+        return users.forms.FollowForm.populate(self)
 
 
 class User:
@@ -215,6 +212,15 @@ class User:
 
     def get_feed(self):
         return Photo.visible_to(self.username)
+
+    def follows(self, user):
+        return db.sql.SELECTFROM(
+            'Follow'
+        ).WHERE(
+            followerUsername=self.username
+        ).AND(
+            followeeUsername=user.username
+        ).first() is not None or user.username == self.username
 
     @staticmethod
     def create(username, password):

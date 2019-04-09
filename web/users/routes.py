@@ -1,18 +1,35 @@
-from flask import render_template, Blueprint
+from flask import render_template, Blueprint, redirect, request
 from flask_login import current_user, login_required
 
-from ..models import User
+from .forms import FollowForm
+from ..app import db
+from .. import home
 
-users = Blueprint('users', __name__, url_prefix='/users')
+user = Blueprint('user', __name__, url_prefix='/user')
 
 
-@users.route('/<username>')
+@user.route('/<username>', methods=['GET', 'POST'])
 @login_required
 def view_user(username):
-    if current_user.is_authenticated():
+    comment_form=home.forms.CommentForm()
+    follow_form=FollowForm()
+
+    person = db.query('Person').find(
+        username=username
+    ).first()
+
+    if request.method == 'POST':
         pass
-    photos = list(User(username).person.photos)
+
+    if person is None:
+        return redirect('home.index')
+
     return render_template(
         'users/view.html',
-        photos=photos
+        person=person,
+        photos=db.sql.SELECTFROM('Photo').WHERE(
+            photoOwner=person.username
+        ).AND(
+            allFollowers=True
+        ).all()
     )

@@ -6,7 +6,7 @@ from flask_login import current_user, login_user, logout_user, login_required
 
 from .forms import LoginForm, RegistrationForm
 from ..app import app
-from ..models import User
+from ..models import Person
 
 auth = Blueprint('auth', __name__, url_prefix='/auth')
 
@@ -38,7 +38,7 @@ def register():
         try:
             if not check_username(form.username.data):
                 raise InvalidUsername()
-            u = User.create(form.username.data, form.password.data)
+            u = Person.create(form.username.data, form.password.data)
             login_user(u)
             return redirect(url_for('home.index'))
         except pymysql.err.IntegrityError:
@@ -61,7 +61,7 @@ def login():
         return redirect(url_for('home.index'))
     form = LoginForm()
     if form.validate_on_submit():
-        u = User(form.username.data)
+        u = Person(form.username.data)
         if u is None or not u.check_password(form.password.data):
             flash('Invalid username or password')
             return render_template('auth/login.html', form=form)

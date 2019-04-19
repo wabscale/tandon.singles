@@ -85,7 +85,7 @@ def index():
         ).all()
     )
     post_form.group.choices.extend(
-        models.CloseFriendGroup.find_groups(current_user.person)
+        models.CloseFriendGroup.find_groups(current_user)
     )
 
     if request.method == 'POST':

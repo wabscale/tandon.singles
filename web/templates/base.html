@@ -2,6 +2,12 @@
 {% from 'bootstrap/nav.html' import render_nav_item %}
 {% from "photo.html" import render_photo, render_photos %}
 
+{% macro nav_item(endpoint, name) %}
+  <button type="button" class="btn btn-outline-success ml-2">
+    {{ render_nav_item(endpoint, name, use_li=True) }}
+  </button>
+{% endmacro %}
+
 <!DOCTYPE html>
 <html lang="en">
 {% block header %}
@@ -23,9 +29,11 @@
     {% block navbarleft %}
       <ul class="nav navbar-nav navbar-expand-sm">
         <li class="nav-item">
-          <a class="navbar-brand" href="{{ url_for('home.index') }}" id="index-nav">tandon.singles</a>
+          <button type="button" class="btn btn-outline-primary pl-3 pr-0">
+            <a class="navbar-brand" href="{{ url_for('home.index') }}" id="index-nav">tandon.singles</a>
+          </button>
         </li>
-        {{ render_nav_item('groups.manage', 'groups', use_li=True) }}
+        {{ nav_item('groups.manage', 'groups') }}
       </ul>
     {% endblock navbarleft %}
 
@@ -34,20 +42,20 @@
         {% if current_user.is_authenticated %}
           <li class="nav-item">
             <button type="button" class="btn btn-outline-success m-2">
-              <a href="/user/{{ current_user.username }}">
+              <a href="/user/{{ current_user.username }}" class="nav-link">
                 {{ current_user.username }}
               </a>
             </button>
           </li>
           <li id="logout-nav">
             <button type="button" class="btn btn-outline-warning m-2">
-              <a href="{{ url_for('auth.logout') }}"><span class="glyphicon glyphicon-log-out"></span> Logout</a>
+              <a href="{{ url_for('auth.logout') }}" class="nav-link">Logout</a>
             </button>
           </li>
         {% else %}
           <li class="nav-item">
             <button type="button" class="btn btn-outline-warning m-2">
-              <a href="{{ url_for('auth.login') }}"><span class="glyphicon glyphicon-log-in"></span> Login</a>
+              <a href="{{ url_for('auth.login') }}" class="nav-link">Login</a>
             </button>
           </li>
         {% endif %}

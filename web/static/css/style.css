@@ -36,3 +36,16 @@ img {
     max-height: 100%;
     object-fit: contain;
 }
+
+.navbar-brand {
+    color: rgba(255,255,255,.8);
+}
+
+.navbar-brand:hover, .nav-link:hover {
+    color: #ffffff;
+}
+
+.nav-link {
+    color: rgba(255,255,255,.7);
+}
+

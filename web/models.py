@@ -172,22 +172,10 @@ class CloseFriendGroup(bigsql.DynamicModel):
 
 
 class Person(bigsql.DynamicModel):
-    @property
-    def follow_form(self):
-        return users.forms.FollowForm.populate(self)
-
-
-class User:
     """
     Base user class. Just give it a username, and it will attempt
     to load its information out of the database.
     """
-
-    def __init__(self, username):
-        self.username, self.password=(None,) * 2
-        self.person=db.query('Person').find(username=username).first()
-        if self.person is not None:
-            self.username, self.password=self.person.username, self.person.password
 
     def check_password(self, pword):
         return check_password_hash(self.password, pword) if self.username is not None else False
@@ -241,9 +229,12 @@ class User:
             db.session.commit()
         except bigsql.big_ERROR:
             db.session.rollback()
-        return User(u.username)
+        return u
 
     @staticmethod
     def get(username):
-        u=User(username)
-        return u if u.person is not None else None
+        return Person.query.find(username=username).first()
+
+    @property
+    def follow_form(self):
+        return users.forms.FollowForm.populate(self)

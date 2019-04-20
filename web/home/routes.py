@@ -1,12 +1,13 @@
-from flask import flash, render_template, Blueprint, send_from_directory, request
-from flask_login import current_user, login_required
 from functools import wraps
 
-import bigsql
+from flask import flash, render_template, Blueprint, send_from_directory, request
+from flask_login import current_user, login_required
 
+import bigsql
 from .forms import PostForm, DeleteForm, CommentForm
 from .. import models
 from ..app import app, db
+from ..notifications import enable_notifications
 
 home=Blueprint('home', __name__, url_prefix='/')
 
@@ -15,10 +16,12 @@ def validate(func):
     """
     validates forms before executing func
     """
+
     @wraps(func)
     def wrapper(form):
         if form.validate_on_submit():
             return func(form)
+
     return wrapper
 
 
@@ -31,6 +34,7 @@ def handle_post(form):
         flash('png, jpg and gifs only plz ;(')
     if not ext:
         flash('unable to post')
+
 
 @validate
 def handle_delete(form):
@@ -58,7 +62,7 @@ def handle_comment(form):
     if photo is None:
         flash('invalid photo')
         return
-    c = db.query('Comment').new(
+    c=db.query('Comment').new(
         username=current_user.username,
         photoID=photo.photoID,
         commentText=form.content.data
@@ -72,6 +76,7 @@ def handle_comment(form):
 
 @home.route('/', methods=['GET', 'POST'])
 @login_required
+@enable_notifications
 def index():
     post_form=PostForm()
     delete_form=DeleteForm()
@@ -89,12 +94,15 @@ def index():
     )
 
     if request.method == 'POST':
-        {
-            'post'   : lambda: handle_post(post_form),
-            'delete' : lambda: handle_delete(delete_form),
-            'comment': lambda: handle_comment(comment_form),
-            None     : lambda: None
-        }[request.form.get('action', default=None)]()
+        try:
+            {
+                'post'   : lambda: handle_post(post_form),
+                'delete' : lambda: handle_delete(delete_form),
+                'comment': lambda: handle_comment(comment_form),
+                None     : lambda: None
+            }[request.form.get('action', default=None)]()
+        except KeyError as e:
+            print(e)
 
     return render_template(
         'home/index.html',

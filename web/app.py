@@ -40,15 +40,17 @@ else:
 
 # register blueprints
 from .auth import auth
-from .users import user
+from .users import users
 from .home import home
 from .groups import groups
+from .photos import photos
 
 list(map(app.register_blueprint, (
     home,
     auth,
-    user,
-    groups
+    users,
+    groups,
+    photos,
 )))
 
 if __name__ == '__main__':

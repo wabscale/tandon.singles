@@ -61,7 +61,7 @@ def login():
         return redirect(url_for('home.index'))
     form = LoginForm()
     if form.validate_on_submit():
-        u = Person(form.username.data)
+        u = Person.get(form.username.data)
         if u is None or not u.check_password(form.password.data):
             flash('Invalid username or password')
             return render_template('auth/login.html', form=form)

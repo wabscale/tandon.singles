@@ -1,5 +1,5 @@
 from flask import redirect, url_for
-from flask_login import LoginManager
+from flask_login import LoginManager, current_user
 
 from .routes import auth
 from ..app import app
@@ -17,3 +17,5 @@ def load_user(username):
 @login_manager.unauthorized_handler
 def unauthorized_callback():
     return redirect(url_for('auth.login'))
+
+# app.jinja_env.globals['current_user'] = current_user

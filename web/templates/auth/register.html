@@ -2,22 +2,22 @@
 {% block content %}
   {% if not registration_enabled %}
     <div class="container">
-      <div class="col-sm-4 offset-sm-4">
-        <div class="alert alert-danger alrt-dismissable" role="alert">
-          Registration closed for now ;(
-          <button type="button" class="close" data-dismiss="alert" aria-label="Close">
-            <span aria-hidden="true">×</span>
-          </button>
+      <div class="row">
+        <div class="col-sm-4 offset-sm-4">
+          <div class="alert alert-danger alrt-dismissable" role="alert">
+            Registration closed for now ;(
+            <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+              <span aria-hidden="true">×</span>
+            </button>
+          </div>
         </div>
       </div>
     </div>
   {% endif %}
-  <div class="row">
-    <div class="col-md-6 offset-md-3">
-      <div class="jumbotron">
-        <h1>Register</h1>
-        {{ render_form(form) }}
-      </div>
+  <div class="mx-auto col-md-6 offset-md-3">
+    <div class="mx-auto jumbotron">
+      <h1>Register</h1>
+      {{ render_form(form) }}
     </div>
   </div>
 {%- endblock %}

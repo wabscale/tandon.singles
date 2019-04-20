@@ -149,23 +149,18 @@ class Photo(bigsql.DynamicModel):
         )
 
         for f in filter(lambda x: x.acceptedfollow, u.follow):
-            photos.extend(
-                Person.query.find(
-                    username=f.followeeUsername
-                ).find().first().public_photos
-            )
+            p=Person.query.find(
+                username=f.followeeUsername
+            ).first()
+            photos.extend(filter(
+                lambda x: x.allFollowers,
+                p.photos
+            ))
 
         return list(sorted(
-            u.photos,
+            photos,
             key=lambda x: x.timestamp,
             reverse=True
-        ))
-
-    @property
-    def public_photos(self):
-        return list(filter(
-            lambda p: not p.isPrivate,
-            self.photos
         ))
 
     @property

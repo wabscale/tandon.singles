@@ -10,7 +10,7 @@ $(document).ready(function () {
     }
 });
 
-function createForm(o, outter='tr') {
+function createForm(o, outter = 'tr') {
     let tr = $(o).closest(outter);
     let form = $('<form method="POST"></form>');
     form.append(tr.find('input[name="id"]'));
@@ -67,8 +67,24 @@ $(document).ready(function () {
     });
 
     $('.follow-user').click(function () {
-        let form = createForm(this, 'div');
+        let form = createForm(this, '.card');
         form.append($('<input type="hidden" name="action" value="follow"/>'));
+        form.appendTo('body').submit();
+    });
+
+    $('.accept-not').click(function () {
+        let form = createForm(this, 'notification');
+        let outter = $(this).closest(".notification");
+        form.append(outter.find('input[name="type"]'));
+        form.append($('<input type="hidden" name="action" value="accept">'));
+        form.appendTo('body').submit();
+    });
+
+    $('.reject-not').click(function () {
+        let form = createForm(this, 'notification');
+        let outter = $(this).closest(".notification");
+        form.append(outter.find('input[name="type"]'));
+        form.append($('<input type="hidden" name="action" value="reject">'));
         form.appendTo('body').submit();
     });
 });

@@ -1,5 +1,5 @@
 from flask import redirect, url_for
-from flask_login import LoginManager, current_user
+from flask_login import LoginManager
 
 from .routes import auth
 from ..app import app

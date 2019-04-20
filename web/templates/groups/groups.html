@@ -1,39 +1,41 @@
 {% extends 'base.html' %}
 
 {% block content %}
-  <table class="table table-dark table-hover">
-    <thead>
-    <tr>
-      <th>Group Name</th>
-      <th>View</th>
-      <th>Edit</th>
-      <th>Delete</th>
-    </tr>
-    </thead>
-    <tbody>
-    {% for update_form in update_forms %}
+  <div class="col-md-10 offset-md-1">
+    <table class="table table-dark table-hover m-4">
+      <thead>
       <tr>
-        {{ update_form.id }}
-        <td>
-          {{ render_field(update_form.group_name, form_type='inline', readonly=True) }}
-        </td>
-        <td>
-          <button type="button" class="btn btn-outline-success">
-            <a href="/groups/view?group_name={{ update_form.group_name.data }}">
-              View
-            </a>
-          </button>
-        </td>
-        <td>
-          <button type="button" class="btn btn-outline-success group-edit">Edit</button>
-        </td>
-        <td>
-          <button type="button" class="btn btn-outline-danger group-delete">Delete</button>
-        </td>
+        <th>Group Name</th>
+        <th>View</th>
+        <th>Edit</th>
+        <th>Delete</th>
       </tr>
-    {% endfor %}
-    </tbody>
-  </table>
+      </thead>
+      <tbody>
+      {% for update_form in update_forms %}
+        <tr>
+          {{ update_form.id }}
+          <td>
+            {{ render_field(update_form.group_name, form_type='inline', readonly=True) }}
+          </td>
+          <td>
+            <button type="button" class="btn btn-outline-success">
+              <a href="{{ url_for('groups.view', group_name=update_form.group_name.data) }}">
+                View
+              </a>
+            </button>
+          </td>
+          <td>
+            <button type="button" class="btn btn-outline-success group-edit">Edit</button>
+          </td>
+          <td>
+            <button type="button" class="btn btn-outline-danger group-delete">Delete</button>
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
   <hr/>
   {{ make_form(new_form, 'New Group') }}
 {% endblock %}

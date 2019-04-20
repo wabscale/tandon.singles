@@ -1,6 +1,8 @@
 {% from 'bootstrap/form.html' import render_form, render_field %}
 {% from 'bootstrap/nav.html' import render_nav_item %}
 {% from "photo.html" import render_photo, render_photos %}
+{% from "form.html" import make_form %}
+{% from "notifications.html" import render_notifications with context %}
 
 {% macro nav_item(endpoint, name) %}
   <button type="button" class="btn btn-outline-success ml-2">
@@ -42,7 +44,7 @@
         {% if current_user.is_authenticated %}
           <li class="nav-item">
             <button type="button" class="btn btn-outline-success m-2">
-              <a href="/user/{{ current_user.username }}" class="nav-link">
+              <a href="{{ url_for('users.view', username=current_user.username) }}" class="nav-link">
                 {{ current_user.username }}
               </a>
             </button>
@@ -67,7 +69,7 @@
 
 <main role="main">
   <div class="container-fluid">
-    <div class="container">
+    <div class="row">
       <div class="col-md-4 offset-md-4">
         {%- with messages = get_flashed_messages() %}
           {%- if messages %}
@@ -83,7 +85,9 @@
         {%- endwith %}
       </div>
     </div>
-    <div class="content">
+  </div>
+  <div class="container-fluid">
+    <div class="row">
       {% block content %}
       {% endblock %}
     </div>

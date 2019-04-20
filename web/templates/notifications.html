@@ -1,0 +1,52 @@
+
+
+{% macro render_notification(obj) %}
+  <div class="card notification">
+    <div class="card-body">
+      {% set form = obj.to_form() %}
+
+      {{ form.id }}
+      {{ form.type }}
+
+      <p class="card-text">
+        {% if form.type.data == "follow" %}
+          Accept follow from
+          <a href="{{ url_for('users.view', username=form.id.data) }}">{{ form.id.data }}</a>
+        {% elif form.type.data == "tag" %}
+          {% set username = obj.photo[0].photoOwner %}
+          Accept
+          <a href="{{ url_for('photos.view', photoID=form.id.data) }}">
+            tag
+          </a>
+          from
+          <a href="{{ url_for('users.view', username=username) }}">
+            {{ username }}
+          </a>
+        {% endif %}
+      </p>
+
+      <button type="button" class="btn btn-outline-success accept-not">
+        Accept
+      </button>
+      <button type="button" class="btn btn-outline-danger reject-not">
+        Reject
+      </button>
+    </div>
+  </div>
+{% endmacro %}
+
+{% macro render_notifications() %}
+  <div class="col-md-2 offset-md-1">
+    <div class="bg-dark rounded pl-1 pr-1">
+      <ul class="nav flex-column">
+        {% set objs = current_user.notifications %}
+        {% for n in objs %}
+          <li class="nav-item">
+            render_notification(n)
+          </li>
+        {% endfor %}
+      </ul>
+    </div>
+  </div>
+  <div class="col-md-1"></div>
+{% endmacro %}

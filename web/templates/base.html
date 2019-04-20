@@ -36,6 +36,7 @@
           </button>
         </li>
         {{ nav_item('groups.manage', 'groups') }}
+        {{ nav_item('users.index', 'users') }}
       </ul>
     {% endblock navbarleft %}
 
@@ -74,7 +75,7 @@
         {%- with messages = get_flashed_messages() %}
           {%- if messages %}
             {% for message in messages %}
-              <div class="alert alert-danger alrt-dismissable" role="alert">
+              <div class="alert alert-danger alert-dismissable" role="alert">
                 {{ message }}
                 <button type="button" class="close" data-dismiss="alert" aria-label="Close">
                   <span aria-hidden="true">×</span>

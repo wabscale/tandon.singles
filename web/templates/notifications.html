@@ -42,7 +42,7 @@
         {% set objs = current_user.notifications %}
         {% for n in objs %}
           <li class="nav-item">
-            render_notification(n)
+            {{ render_notification(n) }}
           </li>
         {% endfor %}
       </ul>

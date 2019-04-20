@@ -1,7 +1,6 @@
 import hashlib
 import imghdr
 import os
-import tempfile
 import time
 
 from flask import flash
@@ -9,9 +8,24 @@ from flask_login import current_user
 from werkzeug.security import generate_password_hash, check_password_hash
 
 import bigsql
-from .app import app, db
 from . import home
+from . import notifications
 from . import users
+from .app import app, db
+
+
+class Tag(bigsql.DynamicModel):
+    def to_form(self):
+        form=notifications.TagForm()
+        form.id.data=self.username
+        return form
+
+
+class Follow(bigsql.DynamicModel):
+    def to_form(self):
+        form=notifications.FollowForm()
+        form.id.data=self.followerUsername
+        return form
 
 
 class Photo(bigsql.DynamicModel):
@@ -33,15 +47,17 @@ class Photo(bigsql.DynamicModel):
         :return: new photo object
         """
 
-        filestream=form.image.data.stream
-        with tempfile.NamedTemporaryFile() as f:
-            f.write(filestream.read())
-            filestream.seek(0)
-            ext=imghdr.what(f.name)
+        try:
+            ext=imghdr.what(
+                '',
+                form.image.raw_data[0].stream._file.getbuffer().tobytes()
+            )
+        except TypeError:
+            return False
 
         if ext not in ('png', 'jpeg', 'gif'):
             # handle invalid file
-            return ext
+            return 'invalid'
 
         sha256=lambda s: hashlib.sha256(s.encode()).hexdigest()
 
@@ -80,7 +96,7 @@ class Photo(bigsql.DynamicModel):
 
             if group.groupOwner != current_user.username and (group is None or not any(
                     group.groupName == g.groupName
-                    for g in current_user.person.belongs
+                    for g in current_user.belongs
             )):
                 flash('Unable to post to {}'.format(group.groupName))
 
@@ -125,21 +141,31 @@ class Photo(bigsql.DynamicModel):
             username=username
         ).first()
 
-        photos = []
+        photos=[]
         photos.extend(u.photos)
         photos.extend(
             cfg.photos
             for cfg in CloseFriendGroup.find_groups(u)
         )
-        photos.extend(
-            f.public_photos
-            for f in u.follow
-        )
+
+        for f in filter(lambda x: x.acceptedfollow, u.follow):
+            photos.extend(
+                Person.query.find(
+                    username=f.followeeUsername
+                ).find().first().public_photos
+            )
 
         return list(sorted(
             u.photos,
             key=lambda x: x.timestamp,
             reverse=True
+        ))
+
+    @property
+    def public_photos(self):
+        return list(filter(
+            lambda p: not p.isPrivate,
+            self.photos
         ))
 
     @property
@@ -149,7 +175,6 @@ class Photo(bigsql.DynamicModel):
     @property
     def comment_form(self):
         return home.forms.CommentForm.populate(self)
-
 
 
 class CloseFriendGroup(bigsql.DynamicModel):
@@ -165,9 +190,6 @@ class CloseFriendGroup(bigsql.DynamicModel):
         return [
             b.closefriendgroup[0]
             for b in person.belongs
-        ] + [
-            cfg
-            for cfg in person.closefriendgroup
         ]
 
 
@@ -190,7 +212,7 @@ class Person(bigsql.DynamicModel):
         return self.person is None
 
     def get_id(self):
-        return None if self.person is None else self.username
+        return self.username
 
     def get_owned_photos(self):
         """
@@ -231,6 +253,13 @@ class Person(bigsql.DynamicModel):
             db.session.rollback()
         return u
 
+    def awaiting_accept(self, other):
+        return db.query('Follow').find(
+            followeeUsername=other.username,
+            followerUsername=self.username,
+            acceptedfollow=False
+        ).first() is not None
+
     @staticmethod
     def get(username):
         return Person.query.find(username=username).first()
@@ -238,3 +267,13 @@ class Person(bigsql.DynamicModel):
     @property
     def follow_form(self):
         return users.forms.FollowForm.populate(self)
+
+    @property
+    def notifications(self):
+        return db.query('Tag').find(
+            username=self.username,
+            acceptedTag=False,
+        ).all() + db.query('Follow').find(
+            followeeUsername=self.username,
+            acceptedfollow=False,
+        ).all()

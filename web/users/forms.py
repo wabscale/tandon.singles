@@ -1,11 +1,10 @@
 from flask_wtf import FlaskForm
-from wtforms.fields import StringField, SubmitField, FileField, BooleanField, SelectField,HiddenField
-from wtforms.validators import DataRequired, InputRequired
-from wtforms.widgets import TextArea
+from wtforms.fields import HiddenField
+from wtforms.validators import DataRequired
 
 
 class FollowForm(FlaskForm):
-    id = HiddenField(
+    id=HiddenField(
         'username',
         validators=[DataRequired()]
     )

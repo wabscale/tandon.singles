@@ -1,2 +1,2 @@
-from .routes import user
+from .routes import users
 from .forms import *

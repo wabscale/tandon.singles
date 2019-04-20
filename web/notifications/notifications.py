@@ -24,7 +24,7 @@ def validate(func):
 @validate
 def handle_follow(form):
     f=db.query('Follow').find(
-        followerUsername=form.id,
+        followerUsername=form.id.data,
         followeeUsername=current_user.username,
         acceptedfollow=False
     ).first()

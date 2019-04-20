@@ -3,7 +3,7 @@
 
 {% macro render_photo(photo, current_user) %}
   <br>
-  <div class="card">
+  <div class="card mt-5">
     {% if current_user.username == photo.photoOwner %}
       {% set delete_form = photo.delete_form %}
       <div class="m-2">
@@ -16,12 +16,14 @@
         </span>
       </div>
     {% endif %}
-    <img src="{{ photo.image_link }}" class="m-5" alt="{{ photo.photoOwner }}">
+    <img class="pl-1 pr-1 photo-post" src="{{ photo.image_link }}" class="m-5" alt="{{ photo.photoOwner }}">
 
     {% set comments = photo.comments | list %}
     <div class="card-body">
       <small>{{ photo.timestamp }}</small>
-      <h4>{{ photo.photoOwner }}</h4>
+      <a href="{{ url_for('users.view', username=photo.photoOwner) }}">
+        <h4>{{ photo.photoOwner }}</h4>
+      </a>
       <p class="card-text">{{ photo.caption }}</p>
       <button data-toggle="collapse" data-target="#photo-comments-{{ photo.photoID }}"
               class="btn btn-primary">
@@ -35,7 +37,9 @@
         <ul class="list-group">
           {% for comment in comments %}
             <div class="card">
-              {{ comment.username }}
+              <a href="{{ url_for('users.view', username=comment.username) }}">
+                {{ comment.username }}
+              </a>
               <small>
                 {{ comment.timestamp }}
               </small>

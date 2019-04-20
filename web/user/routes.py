@@ -38,6 +38,16 @@ def handle_follow(form):
         db.session.rollback()
 
 
+@users.route('/', methods=['GET','POST'])
+@login_required
+@enable_notifications
+def index():
+    return render_template(
+        'users/home.html',
+        FollowForm=FollowForm
+    )
+
+
 @users.route('/<username>', methods=['GET', 'POST'])
 @login_required
 @enable_notifications

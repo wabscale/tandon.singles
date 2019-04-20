@@ -8,6 +8,11 @@ class FollowForm(FlaskForm):
         'username',
         validators=[DataRequired()]
     )
+    action=HiddenField(
+        'follow_user',
+        default='follow_user',
+        validators=[DataRequired()]
+    )
 
     @staticmethod
     def populate(person):

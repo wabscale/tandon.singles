@@ -27,8 +27,8 @@ def handle_post(form):
     ext=models.Photo.create(
         form,
     )
-    if isinstance(ext, str):
-        flash('{} is not a valid image type ;('.format(ext))
+    if ext == 'invalid':
+        flash('png, jpg and gifs only plz ;(')
     if not ext:
         flash('unable to post')
 

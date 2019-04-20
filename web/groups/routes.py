@@ -6,7 +6,7 @@ import bigsql
 from .forms import UpdateGroupForm, NewGroupForm, AddMemberForm, UpdateMemberForm
 from ..app import db
 
-groups=Blueprint('groups', __name__, url_prefix='/groups')
+groups=Blueprint('groups', __name__, url_prefix='/g')
 
 
 def handle_update_group(update_form):
@@ -80,7 +80,7 @@ def manage():
         UpdateGroupForm.populate(
             group
         )
-        for group in current_user.person.closefriendgroups
+        for group in current_user.closefriendgroups
     ]
 
     new_form.action.data='new'

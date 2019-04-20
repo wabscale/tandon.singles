@@ -1,37 +1,186 @@
 [![pipeline status](https://gitlab.com/b1g_J/tandon.singles/badges/master/pipeline.svg)](https://gitlab.com/b1g_J/tandon.singles/commits/master)
 
-# flasq
-For when you need a quick flask app, but are too lazy to write the basics.
+# tandon.singles
 
-# Quickstart
+A proud [flasq](https://gitlab.com/b1g_J/flasq) app.
 
-### Project structure
-Flasq was made in a way that intends you to follow a specific structure for defining routes. Each route should get its own folder with a couple of default files. The structure should be about the following:
+### ORM
+This project didn't seem particularly interesting, so I implemented my own custom ORM to make it more spicy. 
+It features dynamic model creation, with on the fly relationship detection and resolution. 
+It uses an SQL query generator engine that I also implemented for this project.
+
+# big_SQL
+big_SQL is an ORM features dynamic model generation, with on the fly relationship detection and resolution. 
+It uses a high level custom sql generator in its backend.
+
+### Static generation
+To use the static models with bigSQL, all you need to do define your models same as other ORMs:
+```python
+from bigsql import *
+
+class Test(StaticModel):
+    id = StaticColumn(Integer, primary_key=True, auto_increment=True)
+    a_string = StaticColumn(Varchar(128), references="Person.username")
+    date = StaticColumn(DateTime)
+
+db = big_SQL(
+    user='root',
+    pword='password',
+    host='127.0.0.1',
+    db='DB',
+)
+
+db.create_all()
+
+t = Test(a_string='a string')
+
+db.session.add(t)
+
+try:
+    db.session.add(t)
+    db.session.commit()
+except big_ERROR as e:
+    print('onooooooz', e)
+    db.session.rollback()
 
 ```
-routename
-├──  forms.py     # where you can define your flask forms
-├──  __init__.py  # one line importing blueprint object from routes.py
-├──  models.py    # where you can define your database models
-└──  routes.py    # where you define your blueprint and its routes
+
+### Static querying
+After we create an object, we will more than likely want to use it again at some point.
+Here is how you can query, modify then commit statically defined models
+```python
+from bigsql import *
+from datetime import datetime
+
+class Test(StaticModel):
+    id = StaticColumn(Integer, primary_key=True, auto_increment=True)
+    a_string = StaticColumn(Varchar(128))
+    date = StaticColumn(DateTime)
+
+db = big_SQL(
+    user='root',
+    pword='password',
+    host='127.0.0.1',
+    db='DB',
+)
+
+db.create_all()
+
+# to query then modify an object
+t = Test.query.find(a_string='a string').first()
+
+t.date = datetime.now()
+
+try:
+    db.session.commit()
+except big_ERROR as e:
+    print('onooooooz', e)
+    db.session.rollback()
+    
+# To delete an object:
+t = Test.query.find(a_string='another string').first()
+
+db.session.delete(t)
+
+try:
+    db.session.commit()
+except big_ERROR as e:
+    print('onooooooz', e)
+    db.session.rollback()
+
+``` 
+
+
+
+### Dynamic generation
+
+#### Models
+The really cool thing this ORM does is dynamic model generation. 
+If you already have a database with tables defined, you can 
+just query existing tables, and bigsql will generate models for you.
+
+#### Relationships
+If you have a defined foreign key relationship with another table 
+already defined, you don't need to tell bigsql about them. For an object 
+with foreign models, you can just access it as a attribute, and it will 
+hand you an iterable object with all the associated object for the 
+current model (either dynamically or statically generated).
+
+For example:
+
+```python
+
+""" Person structure
+CREATE TABLE Person
+(
+    username  VARCHAR(20),
+    PRIMARY KEY (username)
+);
+"""
+
+""" Photo structure
+CREATE TABLE Photo
+(
+    photoID      int NOT NULL AUTO_INCREMENT,
+    photoOwner   VARCHAR(20),
+    PRIMARY KEY (photoID),
+    FOREIGN KEY (photoOwner) REFERENCES Person (username) ON DELETE CASCADE
+);
+"""
+
+from bigsql import *
+
+db = big_SQL(
+    user='root',
+    pword='password',
+    host='127.0.0.1',
+    db='DB',
+)
+
+# new_photo will be a dynamically generated model object
+admin = db.query('Person').new(username='admin')
+# new_photo will be a dynamically generated model object
+new_photo = db.query('Photo').new(photoOwner='admin')
+
+db.session.add(admin)
+db.session.add(new_photo)
+
+try:
+    db.session.commit()
+except big_ERROR as e:
+    print('onooooooz', e)
+    db.session.rollback()
+
+# the relationship will be detected between Photo and Person, 
+# so you can access either .photo or .photos on a Person object
+# and you will get all the associated photos for this user as a list
+admins_photos = list(admin.photos)
 ```
 
-Obviously you can do whatever you want, but I would recomend following that structure. It may be easiest to refer back to the auth folder to see how things are structured there when writing new sections.
+### Sql Engine
 
-### Debuging
-Debuging is easy! Just run `make run`. the first time you run this, it will create a `virtualenv` with all the dependencies you need. To clean your project of all these files just run `make clean`. If you want to test the docker container, you can do that with `make build && make rund`. This will build the container, then run it. If you need to change the docker options, feel free to edit the `Makefile`. There is a convinient variable called `DOCKER_OPTIONS` that is defined at the top. Anything you put there will be an option when the container is run.
+The query engine is quite simple and easy to use. It sports the fluent influence style for readability. 
 
-### Deploying
-When you deploy your flasq app, there are two folders that will be mounted to your docker container (If you use my `docker-compose.yml`). To deploy all you need to do is run the deploy target:
+```python
+from bigsql import *
+
+db = big_SQL(
+    user='root',
+    pword='password',
+    host='127.0.0.1',
+    db='DB',
+)
+
+# admin will be a dynamically generated model object
+admin = db.sql.SELECTFROM('Person').WHERE(username='admin').first()
+
+# new_user will be a dynamically generated model object
+new_user = db.sql.INSERT(username='new_user').INTO('Person').do()
+
+# to get the raw sql being generated for a query
+raw_sql, args = db.sql.SELECTFROM('Photo').JOIN('Person').WHERE(username='admin').gen()
 
 ```
-make deploy
-```
-
-### traefik
-You will want to read up on how traefik works, as it is how the container will get routed too. Make sure to add your trafik labels in the `docker-compose.yml` and update the acme and docker info in `traefik.toml`.
-
 
 # Maintainer
-- big_J
-
+- big_J | john@bigj.icu

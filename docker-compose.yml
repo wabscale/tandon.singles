@@ -20,7 +20,7 @@ services:
     networks:
       - traefik-proxy
 
-  
+
   flasq:
     build: .
     restart: always
@@ -41,14 +41,16 @@ services:
       - traefik-proxy
 
 
-  # db:
-  #   image: mariadb:10.4
-  #   expose:
-  #     - "3306"
-  #   environment:
-  #     - "MYSQL_ROOT_PASSWORD=password"
-  #   labels:
-  #     - "traefik.enabled=false"
+  db:
+    build: db
+    expose:
+      - "3306"
+    environment:
+      - "MYSQL_ROOT_PASSWORD=password"
+    labels:
+      - "traefik.enabled=false"
+    ports:
+      - "127.0.0.1:3306:3306"
 
 networks:
   traefik-proxy:

@@ -6,3 +6,4 @@ gunicorn
 flask
 
 flask-mysql
+scanf

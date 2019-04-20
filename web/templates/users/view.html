@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+
+{% from "users/macros.html" import render_user %}
+
+{% block content %}
+  <div class="container-fluid">
+    {{ render_user(person, current_user) }}
+
+    {% set visible = current_user.follows(person) or not person.isPrivate %}
+
+    {% if visible %}
+      {{ render_photos(photos, current_user) }}
+    {% endif %}
+  </div>
+{% endblock %}

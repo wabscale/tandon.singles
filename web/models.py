@@ -1,18 +1,274 @@
+import hashlib
+import imghdr
+import os
+import time
+
+from flask import flash
+from flask_login import current_user
 from werkzeug.security import generate_password_hash, check_password_hash
-from flask_login import UserMixin
-from .app import db
+
+import bigsql
+from . import home
+from . import notifications
+from . import users
+from .app import app, db
 
 
-class User(db.Model, UserMixin):
-    id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.String(128), unique=True, index=True)
-    password = db.Column(db.String(128), nullable=False)
+class Tag(bigsql.DynamicModel):
+    def to_form(self):
+        form=notifications.TagForm()
+        form.id.data=self.username
+        return form
+
+
+class Follow(bigsql.DynamicModel):
+    def to_form(self):
+        form=notifications.FollowForm()
+        form.id.data=self.followerUsername
+        return form
+
+
+class Photo(bigsql.DynamicModel):
+    @property
+    def image_link(self):
+        if self.filePath is None:
+            return ''
+        dir_name, image_name=os.path.split(self.filePath)
+        _, dir_name=os.path.split(dir_name)
+        return '/img/{}/{}'.format(dir_name, image_name)
+
+    @staticmethod
+    def create(form):
+        """
+        :param image:
+        :param owner:
+        :param caption:
+        :param all_followers:
+        :return: new photo object
+        """
+
+        try:
+            ext=imghdr.what(
+                '',
+                form.image.raw_data[0].stream._file.getbuffer().tobytes()
+            )
+        except TypeError:
+            return False
+
+        if ext not in ('png', 'jpeg', 'gif'):
+            # handle invalid file
+            return 'invalid'
+
+        sha256=lambda s: hashlib.sha256(s.encode()).hexdigest()
+
+        filename='{}.{}'.format(sha256('{}{}{}{}'.format(
+            str(time.time()),
+            form.caption.data,
+            current_user.username,
+            os.urandom(0x10)
+        )), ext)
+
+        filedir=os.path.join(
+            app.config['UPLOAD_DIR'],
+            sha256(current_user.username),
+        )
+
+        filepath=os.path.join(
+            filedir,
+            filename
+        )
+
+        os.makedirs(filedir, exist_ok=True)
+
+        form.image.data.save(filepath)
+
+        photo=db.query('Photo').new(
+            allFollowers=form.public.data,
+            photoOwner=current_user.username,
+            filePath=filepath,
+            caption=form.caption.data,
+        )
+
+        if form.group.data:
+            group=db.query('CloseFriendGroup').find(
+                groupName=form.group.data
+            ).first()
+
+            if group.groupOwner != current_user.username and (group is None or not any(
+                    group.groupName == g.groupName
+                    for g in current_user.belongs
+            )):
+                flash('Unable to post to {}'.format(group.groupName))
+
+            db.query('Share').new(
+                groupName=group.groupName,
+                groupOwner=group.groupOwner,
+                photoID=photo.photoID
+            )
+        try:
+            db.session.commit()
+            return True
+        except bigsql.big_ERROR:
+            db.session.rollback()
+            return False
+
+    @staticmethod
+    def owned_by(username):
+        """
+        Generates list of Photo object owner by username
+
+        :param str username: owner of photos being selected
+        :return: [
+            Photo,
+            ...
+        ]
+        """
+        return db.query('Photo').find(
+            photoOwner=username
+        ).all()
+
+    @staticmethod
+    def visible_to(username):
+        """
+        Should give back all photo object that are visible to username
+
+        TODO:
+        need to make this order all photos by timestamp
+
+        :return: [ Photo ]
+        """
+        u=db.query('Person').find(
+            username=username
+        ).first()
+
+        photos=[]
+        photos.extend(u.photos)
+        photos.extend(
+            cfg.photos
+            for cfg in CloseFriendGroup.find_groups(u)
+        )
+
+        for f in filter(lambda x: x.acceptedfollow, u.follow):
+            p=Person.query.find(
+                username=f.followeeUsername
+            ).first()
+            photos.extend(filter(
+                lambda x: x.allFollowers,
+                p.photos
+            ))
+
+        return list(sorted(
+            photos,
+            key=lambda x: x.timestamp,
+            reverse=True
+        ))
+
+    @property
+    def delete_form(self):
+        return home.forms.DeleteForm.populate(self)
+
+    @property
+    def comment_form(self):
+        return home.forms.CommentForm.populate(self)
+
+
+class CloseFriendGroup(bigsql.DynamicModel):
+    @property
+    def photos(self):
+        return [
+            share.photo
+            for share in self.shares
+        ]
+
+    @staticmethod
+    def find_groups(person):
+        return [
+            b.closefriendgroup[0]
+            for b in person.belongs
+        ]
+
+
+class Person(bigsql.DynamicModel):
+    """
+    Base user class. Just give it a username, and it will attempt
+    to load its information out of the database.
+    """
+
+    def check_password(self, pword):
+        return check_password_hash(self.password, pword) if self.username is not None else False
+
+    def is_authenticated(self):
+        return self.person is not None
+
+    def is_active(self):
+        return True
+
+    def is_anonymous(self):
+        return self.person is None
 
     def get_id(self):
         return self.username
 
-    def set_password(self, password):
-        self.password = generate_password_hash(password)
+    def get_owned_photos(self):
+        """
+        :return list: Photo object owned by self.username
+        """
+        return Photo.owned_by(self.username)
 
-    def check_password(self, password):
-        return check_password_hash(self.password, password)
+    def get_feed(self):
+        return Photo.visible_to(self.username)
+
+    def follows(self, user):
+        return db.sql.SELECTFROM(
+            'Follow'
+        ).WHERE(
+            followerUsername=self.username
+        ).AND(
+            followeeUsername=user.username
+        ).first() is not None or user.username == self.username
+
+    @staticmethod
+    def create(username, password):
+        """
+        Make new user from username, password.
+
+        :param str username:
+        :param str password:
+        :return User: new User object
+        """
+        password=generate_password_hash(password)
+        u=db.query('Person').new(
+            username=username,
+            password=password
+        )
+        db.session.add(u)
+        try:
+            db.session.commit()
+        except bigsql.big_ERROR:
+            db.session.rollback()
+        return u
+
+    def awaiting_accept(self, other):
+        return db.query('Follow').find(
+            followeeUsername=other.username,
+            followerUsername=self.username,
+            acceptedfollow=False
+        ).first() is not None
+
+    @staticmethod
+    def get(username):
+        return Person.query.find(username=username).first()
+
+    @property
+    def follow_form(self):
+        return users.forms.FollowForm.populate(self)
+
+    @property
+    def notifications(self):
+        return db.query('Tag').find(
+            username=self.username,
+            acceptedTag=False,
+        ).all() + db.query('Follow').find(
+            followeeUsername=self.username,
+            acceptedfollow=False,
+        ).all()

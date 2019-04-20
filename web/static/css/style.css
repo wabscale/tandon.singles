@@ -30,3 +30,29 @@ navbar {
 .well {
     background-color: #505050;
 }
+
+img {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+}
+
+.navbar-brand {
+    color: rgba(255,255,255,.8);
+}
+
+.navbar-brand:hover, .nav-link:hover {
+    color: #ffffff;
+}
+
+.nav-link {
+    color: rgba(255,255,255,.7);
+}
+
+.photo-post {
+    width:100%;
+}
+
+.close {
+    padding: 0 !important;
+}

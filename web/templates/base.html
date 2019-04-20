@@ -1,78 +1,103 @@
 {% from 'bootstrap/form.html' import render_form, render_field %}
 {% from 'bootstrap/nav.html' import render_nav_item %}
-{% from 'form.html' import make_form %}
+{% from "photo.html" import render_photo, render_photos %}
+{% from "form.html" import make_form %}
+{% from "notifications.html" import render_notifications with context %}
+
+{% macro nav_item(endpoint, name) %}
+  <button type="button" class="btn btn-outline-success ml-2">
+    {{ render_nav_item(endpoint, name, use_li=True) }}
+  </button>
+{% endmacro %}
 
 <!DOCTYPE html>
 <html lang="en">
-  {% block header %}
-    <head>
-      {% block title %}
-        <title>Tandon.Singles</title>
+{% block header %}
+  <head>
+    {% block title %}
+      <title>tandon.singles</title>
+    {% endblock %}
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    {{ bootstrap.load_css() }}
+    <link rel="stylesheet" href="/static/css/style.css">
+    {% block stylesheets %}{% endblock %}
+  </head>
+{% endblock %}
+
+<body>
+<nav class="navbar navbar-expand-sm navbar-inverse" id="top-navbar">
+  <div class="container-fluid">
+    {% block navbarleft %}
+      <ul class="nav navbar-nav navbar-expand-sm">
+        <li class="nav-item">
+          <button type="button" class="btn btn-outline-primary pl-3 pr-0">
+            <a class="navbar-brand" href="{{ url_for('home.index') }}" id="index-nav">tandon.singles</a>
+          </button>
+        </li>
+        {{ nav_item('groups.manage', 'groups') }}
+        {{ nav_item('users.index', 'users') }}
+      </ul>
+    {% endblock navbarleft %}
+
+    {% block navbarright %}
+      <ul class="nav navbar-nav navbar-right">
+        {% if current_user.is_authenticated %}
+          <li class="nav-item">
+            <button type="button" class="btn btn-outline-success m-2">
+              <a href="{{ url_for('users.view', username=current_user.username) }}" class="nav-link">
+                {{ current_user.username }}
+              </a>
+            </button>
+          </li>
+          <li id="logout-nav">
+            <button type="button" class="btn btn-outline-warning m-2">
+              <a href="{{ url_for('auth.logout') }}" class="nav-link">Logout</a>
+            </button>
+          </li>
+        {% else %}
+          <li class="nav-item">
+            <button type="button" class="btn btn-outline-warning m-2">
+              <a href="{{ url_for('auth.login') }}" class="nav-link">Login</a>
+            </button>
+          </li>
+        {% endif %}
+      </ul>
+    {% endblock %}
+  </div>
+</nav>
+<br>
+
+<main role="main">
+  <div class="container-fluid">
+    <div class="row">
+      <div class="col-md-4 offset-md-4">
+        {%- with messages = get_flashed_messages() %}
+          {%- if messages %}
+            {% for message in messages %}
+              <div class="alert alert-danger alert-dismissable" role="alert">
+                {{ message }}
+                <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                  <span aria-hidden="true">×</span>
+                </button>
+              </div>
+            {% endfor %}
+          {%- endif %}
+        {%- endwith %}
+      </div>
+    </div>
+  </div>
+  <div class="container-fluid">
+    <div class="row">
+      {% block content %}
       {% endblock %}
-      <meta charset="utf-8">
-      <meta name="viewport" content="width=device-width, initial-scale=1">
-      {{ bootstrap.load_css() }}
-      <link rel="stylesheet" href="/static/css/style.css">
-    </head>
-  {% endblock %}
+    </div>
+  </div>
+</main>
 
-  <body>
-    <nav class="navbar navbar-expand-sm navbar-inverse" id="top-navbar">
-      <div class="container-fluid">
-        <a class="navbar-brand" href="{{ url_for('index') }}" id="index-nav">Tandon.Singles</a>
-        {% block navbarleft %}
-          <ul lcass="nav navbar-nav mr-auto">
-            {# {{ render_nav_item('blueprint.view', 'title', use_li=True) }} #}
-          </ul>
-        {% endblock navbarleft %}
-        {% block navbarright %}
-          <ul class="nav navbar-nav navbar-right">
-            {% if current_user.is_authenticated %}
-              <li class="nav-item">
-                <a class="navbar-brand">{{ current_user.name }}</a>
-              </li>
-            <li id="logout-nav">
-              <a href="{{ url_for('auth.logout') }}"><span class="glyphicon glyphicon-log-out"></span> Logout</a>
-            </li>
-          {% else %}
-            <li class="nav-item">
-              <a href="{{ url_for('auth.login') }}"><span class="glyphicon glyphicon-log-in"></span> Login</a>
-            </li>
-          {% endif %}
-          </ul>
-        {% endblock %}
-      </div>
-    </nav>
-    <br>
-
-    <main role="main">
-      <div class="container-fluid">
-        <div class="container">
-          <div class="col-md-4 offset-md-4">
-            {%- with messages = get_flashed_messages() %}
-              {%- if messages %}
-                {% for message in messages %}
-                  <div class="alert alert-danger alrt-dismissable" role="alert">
-                    {{ message }}
-                    <button type="button" class="close" data-dismiss="alert" aria-label="Close">
-                      <span aria-hidden="true">×</span>
-                    </button>
-                  </div>
-                {% endfor %}
-              {%- endif %}
-            {%- endwith %}
-          </div>
-        </div>
-        <div class="content">
-          {% block content %}
-          {% endblock %}
-        </div>
-      </div>
-    </main>
-
-    {% block scripts %}
-      {{ bootstrap.load_js() }}
-      <script src="{{ url_for('static', filename='js/utils.js') }}"></script>
-    {% endblock scripts %}
-  </body>
+{% block scripts %}
+  {{ bootstrap.load_js() }}
+  <script src="{{ url_for('static', filename='js/utils.js') }}"></script>
+{% endblock scripts %}
+</body>
 </html>

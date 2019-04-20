@@ -1,10 +1,31 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>$Title$</title>
-</head>
-<body>
-$END$
-</body>
-</html>
+{% macro render_user(person, current_user) %}
+  <div class="card">
+    {% set follow_form = person.follow_form %}
+    {{ follow_form.id }}
+    {{ follow_form.csrf_token }}
+
+    <div class="card-body text-center">
+      <div class="float-left">
+        <h3 class="pl-3">
+          {{ person.username }}
+        </h3>
+      </div>
+      {% if current_user.username == person.username %}
+      {% elif current_user.awaiting_accept(person) %}
+        <div class="alert alert-success">
+          Follow request sent
+        </div>
+      {% elif not current_user.follows(person) %}
+        <button type="button" class="btn btn-outline-success follow-user">
+          Follow {{ person.username }}
+        </button>
+      {% else %}
+        {{ follow_form.id }}
+        <button type="button" class="btn btn-outline-danger follow-user">
+          Unfollow{{ person.username }}
+        </button>
+      {% endif %}
+    </div>
+  </div>
+  <br>
+{% endmacro %}

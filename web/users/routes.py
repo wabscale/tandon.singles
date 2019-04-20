@@ -7,6 +7,7 @@ from bigsql import bigsql
 from .forms import FollowForm
 from .. import home
 from ..app import db
+from .. import models
 from ..notifications import enable_notifications
 
 users=Blueprint('users', __name__, url_prefix='/u')
@@ -38,13 +39,22 @@ def handle_follow(form):
         db.session.rollback()
 
 
-@users.route('/', methods=['GET','POST'])
+@users.route('/', methods=['GET', 'POST'])
 @login_required
 @enable_notifications
 def index():
+    follow_form=FollowForm()
+
+    if request.method == 'POST':
+        {
+            'follow': lambda: handle_follow(follow_form),
+            None    : lambda: None
+        }[request.form.get('action', default=None)]()
+
     return render_template(
         'users/home.html',
-        FollowForm=FollowForm
+        FollowForm=FollowForm,
+        persons=models.Person.query.all()
     )
 
 

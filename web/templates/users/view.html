@@ -1,36 +1,6 @@
 {% extends "base.html" %}
 
-{% macro render_user(person, current_user) %}
-  <div class="offset-md-5 col-md-2">
-    <div class="card">
-      <h3 class="text-center m-3">
-        {{ person.username }}
-      </h3>
-      {% set follow_form = person.follow_form %}
-      {{ follow_form.id }}
-      {{ follow_form.csrf_token }}
-      {% if current_user.username == person.username %}
-
-      {% elif current_user.awaiting_accept(person) %}
-        <div class="card-body text-center">
-          <div class="alert alert-success">
-            Follow request sent
-          </div>
-        </div>
-      {% elif not current_user.follows(person) %}
-        <div class="card-body text-center">
-          <button type="button" class="btn btn-outline-success follow-user">Follow</button>
-        </div>
-      {% else %}
-        <div class="card-body text-center">
-          {{ follow_form.id }}
-          <button type="button" class="btn btn-outline-danger follow-user">Unfollow</button>
-        </div>
-      {% endif %}
-    </div>
-  </div>
-  <br>
-{% endmacro %}
+{% from "users/macros.html" import render_user %}
 
 {% block content %}
   <div class="container-fluid">

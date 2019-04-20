@@ -52,3 +52,7 @@ img {
 .photo-post {
     width:100%;
 }
+
+.close {
+    padding: 0 !important;
+}

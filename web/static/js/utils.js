@@ -73,7 +73,7 @@ $(document).ready(function () {
     });
 
     $('.accept-not').click(function () {
-        let form = createForm(this, 'notification');
+        let form = createForm(this, 'li');
         let outter = $(this).closest(".notification");
         form.append(outter.find('input[name="type"]'));
         form.append($('<input type="hidden" name="action" value="accept">'));
@@ -81,7 +81,7 @@ $(document).ready(function () {
     });
 
     $('.reject-not').click(function () {
-        let form = createForm(this, 'notification');
+        let form = createForm(this, 'li');
         let outter = $(this).closest(".notification");
         form.append(outter.find('input[name="type"]'));
         form.append($('<input type="hidden" name="action" value="reject">'));

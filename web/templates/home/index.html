@@ -1,22 +1,21 @@
 {% extends 'base.html' %}
 
 {% block content %}
-  <div class="container-fluid">
-    {# new post form #}
-    <div class="col-md-4 offset-md-4">
-      <div class="card">
-        <div class="card-header">
-          <h2>
-            Post Photo
-          </h2>
-        </div>
-        <div class="card-body">
-          {{ render_form(form) }}
-        </div>
+  {# new post form #}
+  {{ render_notifications() }}
+  <div class="col-md-4">
+    <div class="card">
+      <div class="card-header">
+        <h2>
+          Post Photo
+        </h2>
+      </div>
+      <div class="card-body">
+        {{ render_form(form) }}
       </div>
     </div>
-    <br>
-
-    {{ render_photos(photos, current_user) }}
   </div>
+  <br>
+
+  {{ render_photos(photos, current_user) }}
 {% endblock %}

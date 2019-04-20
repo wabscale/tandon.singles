@@ -6,11 +6,17 @@ InsecureSkipVerify = true
   [entryPoints.http]
   address = ":80"
   compress = true
+    [entrypoints.http.whitelist]
+      sourceRange = ["128.238.0.0/16","216.165.0.0/16"]
+      useXForwardedFor = true
     [entryPoints.http.redirect]
     entryPoint = "https"
   [entryPoints.https]
   address = ":443"
   compress = true
+    [entrypoints.https.whitelist]
+      sourceRange = ["128.238.0.0/16","216.165.0.0/16"]
+      useXForwardedFor = true
     [entryPoints.https.tls]
 
 [api]

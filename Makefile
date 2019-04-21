@@ -32,6 +32,7 @@ deploy:
 	if ! docker network ls | grep "traefik-proxy"; then \
 		docker network create traefik-proxy; \
 	fi
+	git submodule update
 	${DOCKER_COMPOSE} kill
 	${DOCKER_COMPOSE} rm -f
 	${DOCKER_COMPOSE} up --build -d --force-recreate ${DOCKER_DEPLOY_OPTIONS}

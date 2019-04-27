@@ -4,10 +4,10 @@ from flask import render_template, Blueprint, redirect, request
 from flask_login import current_user, login_required
 
 from bigsql import bigsql
-from .forms import FollowForm
+from .forms import FollowForm, SearchForm
 from .. import home
-from ..app import db
 from .. import models
+from ..app import db
 from ..notifications import enable_notifications
 
 users=Blueprint('users', __name__, url_prefix='/u')
@@ -39,22 +39,39 @@ def handle_follow(form):
         db.session.rollback()
 
 
+@validate
+def search_users(form):
+    return db.query('Person').append_raw(
+        'WHERE Person.username LIKE %s',
+        ('%%{}%%'.format(form.content.data),)
+    ).all()
+
+
 @users.route('/', methods=['GET', 'POST'])
 @login_required
 @enable_notifications
 def index():
     follow_form=FollowForm()
+    search_form=SearchForm()
 
+    persons=None
     if request.method == 'POST':
-        {
-            'follow': lambda: handle_follow(follow_form),
-            None    : lambda: None
-        }[request.form.get('action', default=None)]()
+        try:
+            {
+                'follow': lambda: handle_follow(follow_form),
+                None    : lambda: None
+            }[request.form.get('action', default=None)]()
+        except KeyError:
+            pass
+
+        if request.form.get('action', default=None) == 'search':
+            persons=search_users(search_form)
 
     return render_template(
         'users/home.html',
         FollowForm=FollowForm,
-        persons=models.Person.query.all()
+        search_form=search_form,
+        persons=persons if persons is not None else models.Person.query.all()
     )
 
 

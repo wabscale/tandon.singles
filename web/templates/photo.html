@@ -2,7 +2,6 @@
 {% from 'bootstrap/nav.html' import render_nav_item %}
 
 {% macro render_photo(photo, current_user) %}
-  <br>
   <div class="card mt-5">
     {% if current_user.username == photo.photoOwner %}
       {% set delete_form = photo.delete_form %}
@@ -19,12 +18,27 @@
     <img class="pl-1 pr-1 photo-post" src="{{ photo.image_link }}" class="m-5" alt="{{ photo.photoOwner }}">
 
     {% set comments = photo.comments | list %}
+    {% set tags = photo.tags | list %}
     <div class="card-body">
       <small>{{ photo.timestamp }}</small>
       <a href="{{ url_for('users.view', username=photo.photoOwner) }}">
-        <h4>{{ photo.photoOwner }}</h4>
+        <h4>@{{ photo.photoOwner }}</h4>
       </a>
       <p class="card-text">{{ photo.caption }}</p>
+      <p class="card-text">
+      {% if tags | length != 0 %}
+        <h5>
+          Tags:
+        </h5>
+        {% for tag in tags -%}
+          {% if tag.acceptedTag -%}
+            <a href="{{ url_for('users.view', username=tag.username) }}">
+              {{ tag.username }}
+            </a>
+          {% endif -%}
+        {% endfor -%}
+      {% endif %}
+      </p>
       <button data-toggle="collapse" data-target="#photo-comments-{{ photo.photoID }}"
               class="btn btn-primary">
         Comments
@@ -38,7 +52,7 @@
           {% for comment in comments %}
             <div class="card">
               <a href="{{ url_for('users.view', username=comment.username) }}">
-                {{ comment.username }}
+                @{{ comment.username }}
               </a>
               <small>
                 {{ comment.timestamp }}
@@ -76,7 +90,7 @@
               <div class="md-form mb-5">
                 {{ comment_form.id }}
                 {{ comment_form.action }}
-                {{ comment_form.content }}
+                {{ comment_form.content(class='form-control') }}
               </div>
             </div>
 
@@ -91,9 +105,11 @@
 {% endmacro %}
 
 {% macro render_photos(photos, current_user) %}
-  <div class="card-columns">
     {% for photo in photos %}
-      {{ render_photo(photo, current_user) }}
+      <div class="row">
+        <div class="col-md-12">
+          {{ render_photo(photo, current_user) }}
+        </div>
+      </div>
     {% endfor %}
-  </div>
 {% endmacro %}

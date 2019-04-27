@@ -52,6 +52,14 @@ $(document).ready(function () {
         form.appendTo('body').submit();
     });
 
+    $('.group-member-delete').click(function() {
+       let form=createForm(this);
+       let outter=$(this).closest('tr');
+       form.append(outter.find('input[name="member_name"]'));
+       form.append($('<input type="hidden" name="action" value="delete">'));
+       form.appendTo('body').submit();
+    });
+
     $('.photo-delete').click(function () {
         let form = createForm(this, 'span');
         form.append($('<input type="hidden" name="action" value="delete"/>'));

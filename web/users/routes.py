@@ -61,8 +61,10 @@ def index():
                 'follow': lambda: handle_follow(follow_form),
                 None    : lambda: None
             }[request.form.get('action', default=None)]()
-        except KeyError:
-            pass
+        except KeyError as e:
+            print('KeyError', e)
+        except pymysql.err.IntegrityError:
+            db.session.rollback()
 
         if request.form.get('action', default=None) == 'search':
             persons=search_users(search_form)

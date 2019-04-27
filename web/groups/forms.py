@@ -4,14 +4,6 @@ from wtforms.validators import DataRequired
 
 
 class UpdateMemberForm(FlaskForm):
-    id = HiddenField(
-        'group_name',
-        validators=[DataRequired()]
-    )
-    group_name=StringField(
-        'Group Name',
-        validators=[DataRequired()]
-    )
     action = HiddenField(
         default='update',
         validators=[DataRequired()]
@@ -21,19 +13,13 @@ class UpdateMemberForm(FlaskForm):
     )
 
     @staticmethod
-    def populate(username, group_name):
+    def populate(username):
         form=UpdateMemberForm()
-        form.id.data=group_name
-        form.group_name.data=group_name
         form.member_name.data=username
         return form
 
 
 class AddMemberForm(FlaskForm):
-    id = HiddenField(
-        'group_name',
-        validators=[DataRequired()]
-    )
     action = HiddenField(
         default='add',
         validators=[DataRequired()]

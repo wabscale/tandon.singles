@@ -1,5 +1,6 @@
 from functools import wraps
 
+import pymysql.cursors
 from flask import flash, render_template, Blueprint, send_from_directory, request
 from flask_login import current_user, login_required
 
@@ -82,16 +83,15 @@ def index():
     delete_form=DeleteForm()
     comment_form=CommentForm()
 
-    post_form.group.choices=[('', '---')]
-    post_form.group.choices.extend(
-        (group.groupName,) * 2
-        for group in db.query('CloseFriendGroup').find(
+    group_choices=set()
+    group_choices.add(('', '---'))
+    for group in db.query('CloseFriendGroup').find(
             groupOwner=current_user.username
-        ).all()
-    )
-    post_form.group.choices.extend(
-        models.CloseFriendGroup.find_groups(current_user)
-    )
+    ).all():
+        group_choices.add((group.groupName,)*2)
+    for b in current_user.belongs:
+        group_choices.add((b.groupName,)*2)
+    post_form.group.choices=list(group_choices)
 
     if request.method == 'POST':
         try:
@@ -102,17 +102,18 @@ def index():
                 None     : lambda: None
             }[request.form.get('action', default=None)]()
         except KeyError as e:
-            print(e)
-
+            print('KeyError', e)
+        except pymysql.err.IntegrityError:
+            db.session.rollback()
     return render_template(
         'home/index.html',
-        form=post_form,
+        post_form=post_form,
         photos=models.Photo.visible_to(current_user.username)
     )
 
 
 @home.route('/img/<path:path>')
-@login_required
+# @login_required
 def img(path):
     return send_from_directory(
         app.config['UPLOAD_DIR'],

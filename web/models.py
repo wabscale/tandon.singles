@@ -14,10 +14,17 @@ from . import users
 from .app import app, db
 
 
+class Share(bigsql.DynamicModel):
+    @property
+    def photo(self):
+        return Photo.query.find(
+            photoID=self.photoID
+        ).first()
+
 class Tag(bigsql.DynamicModel):
     @property
     def photo(self):
-        p = Photo.query.find(
+        p=Photo.query.find(
             photoID=self.photoID
         ).first()
         return p
@@ -91,7 +98,7 @@ class Photo(bigsql.DynamicModel):
 
         caption=form.caption.data.split()
 
-        tags, caption = Photo.parse_caption(caption)
+        tags, caption=Photo.parse_caption(caption)
         photo=db.query('Photo').new(
             allFollowers=form.public.data,
             photoOwner=current_user.username,
@@ -135,11 +142,11 @@ class Photo(bigsql.DynamicModel):
         rem=set()
         for index, word in enumerate(caption):
             if word.startswith('@'):
-                rem.add(index)
                 username=word[1:]
                 if Person.query.find(
-                    username=username
+                        username=username
                 ).first() is not None:
+                    rem.add(index)
                     tags.append(username)
         caption=''.join(
             word
@@ -179,10 +186,7 @@ class Photo(bigsql.DynamicModel):
 
         photos=[]
         photos.extend(u.photos)
-        photos.extend(
-            cfg.photos
-            for cfg in CloseFriendGroup.find_groups(u)
-        )
+        photos.extend(CloseFriendGroup.find_shared_photos(u))
 
         for f in filter(lambda x: x.acceptedfollow, u.follow):
             p=Person.query.find(
@@ -193,7 +197,7 @@ class Photo(bigsql.DynamicModel):
                 p.photos
             ))
 
-        return list(sorted(
+        return set(sorted(
             photos,
             key=lambda x: x.timestamp,
             reverse=True
@@ -217,11 +221,22 @@ class CloseFriendGroup(bigsql.DynamicModel):
         ]
 
     @staticmethod
-    def find_groups(person):
-        return [
-            b.closefriendgroup[0]
-            for b in person.belongs
-        ]
+    def find_shared_photos(person):
+        """
+        This will return photo object that have been
+        shared in all groups that person belongs to.
+
+        :param person: PersonModel
+        :return: [PhotoModel]
+        """
+
+        for b in person.belongs:
+            shares=CloseFriendGroup.query.find(
+                groupName=b.groupName,
+                groupOwner=b.groupOwner
+            ).first().shares
+            for s in shares:
+                yield s.photo
 
 
 class Person(bigsql.DynamicModel):

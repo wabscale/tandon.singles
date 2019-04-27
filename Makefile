@@ -9,9 +9,9 @@ DOCKER_IMAGE_NAME=flasq
 DOCKER_OPTIONS=--rm -it -p 5000:5000
 DOCKER_DEPLOY_OPTIONS=
 
-.PHONY: all deploy buildall build buildbase rund killd setup cun cleand db
+.PHONY: db
 
-all: build rund
+all: debug
 buildall: buildbase build
 
 ############################################################
@@ -44,17 +44,17 @@ build:
 buildbase:
 	docker build -t jmc1283/flasq-base base
 
-rund: killd
+drun: dkill
 	docker run ${DOCKER_OPTIONS} --name ${DOCKER_IMAGE_NAME} ${DOCKER_IMAGE_NAME}
 
-cleand: killd
+dclean: killd
 	docker system prune -f
 	if [ -n "`docker image list -q | grep ${DOCKER_IMAGE_NAME}`" ]; then \
 		docker rmi ${DOCKER_IMAGE_NAME}; \
 		docker rmi jmc1283/flasq-base; \
 	fi
 
-killd:
+dkill:
 	if [ -z "$(docker ps -q) | grep ${DOCKER_IMAGE_NAME}" ]; then \
 		docker kill ${DOCKER_IMAGE_NAME}; \
 	fi
@@ -95,8 +95,9 @@ setup:
 	virtualenv -p ${PYTHON_VERSION} ${ENV_NAME}
 	./${ENV_NAME}/bin/pip install -r base/requirements.txt
 	./${ENV_NAME}/bin/pip install -r requirements.txt
+	./${ENV_NAME}/bin/pip install -r bigsql/requirements.txt
 
-run:
+debug:
 	if [ ! -d ${ENV_NAME} ]; then \
 		make setup; \
 	fi
@@ -105,13 +106,15 @@ run:
 	fi
 	./${ENV_NAME}/bin/python ${MAIN_NAME}
 
-clean:
+pyclean:
 	if [ -d ${ENV_NAME} ]; then \
 		rm -rf ${ENV_NAME}; \
 	fi
 	if [ -n "`find . -name __pycache__`" ]; then \
 		rm -rf `find . -name __pycache__`; \
 	fi
+
+clean:
 	if [ -f .data ]; then \
 		rm -rf .data; \
 	fi

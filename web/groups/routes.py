@@ -1,55 +1,80 @@
+from functools import wraps
+
+import pymysql.err
 from flask import render_template, Blueprint, request, flash, redirect
 from flask_login import login_required, current_user
-import pymysql.err
-import bigsql
 
+import bigsql
 from .forms import UpdateGroupForm, NewGroupForm, AddMemberForm, UpdateMemberForm
 from ..app import db
 
 groups=Blueprint('groups', __name__, url_prefix='/g')
 
 
+def validate(func):
+    """
+    validates forms before executing func
+    """
+
+    @wraps(func)
+    def wrapper(form, *args):
+        if form.validate_on_submit():
+            return func(form, *args)
+
+    return wrapper
+
+
 def handle_update_group(update_form):
     pass
 
 
+@validate
 def handle_delete_group(update_form):
-    cfg = db.query('CloseFriendGroup').find(
+    db.query('CloseFriendGroup').find(
         groupName=update_form.id.data
     ).first()
-    db.session.delete(cfg)
     try:
         db.session.commit()
     except bigsql.big_ERROR:
         db.session.rollback()
 
 
+@validate
 def handle_new_group(new_form):
-    if new_form.validate_on_submit():
-        cfg = db.query('CloseFriendGroup').new(
-            groupName=new_form.group_name.data,
-            groupOwner=current_user.username
-        )
-        db.session.add(cfg)
-        try:
-            db.session.commit()
-        except bigsql.big_ERROR:
-            db.session.rollback()
+    db.query('CloseFriendGroup').new(
+        groupName=new_form.group_name.data,
+        groupOwner=current_user.username
+    )
+    try:
+        db.session.commit()
+    except bigsql.big_ERROR:
+        db.session.rollback()
 
 
-def handle_update_member(update_form):
-    if update_form.validate_on_submit():
-        pass
+@validate
+def handle_delete_member(update_form, group):
+    db.query('Belong').delete(
+        groupName=group.groupName,
+        groupOwner=group.groupOwner,
+        username=update_form.member_name.data,
+    )
+    try:
+        db.session.commit()
+    except bigsql.big_ERROR:
+        db.session.rollback()
 
 
-def handle_delete_member(update_form):
-    if update_form.validate_on_submit():
-        pass
-
-
-def handle_new_member(new_form):
-    if new_form.validate_on_submit():
-        pass
+@validate
+def handle_new_member(new_form, group):
+    db.query('Belong').new(
+        groupName=group.groupName,
+        groupOwner=group.groupOwner,
+        username=new_form.members.data,
+    )
+    try:
+        db.session.commit()
+    except bigsql.big_ERROR:
+        db.session.rollback()
 
 
 @groups.route('/manage', methods=['GET', 'POST'])
@@ -100,12 +125,12 @@ def view():
     :param group_name:
     :return:
     """
-    group_name = request.args.get('group_name', default=None)
+    group_name=request.args.get('group_name', default=None)
     if group_name is None:
         return redirect('home.index')
     group=db.query('CloseFriendGroup').find(
         groupName=group_name,
-        group_owner=current_user.username
+        groupOwner=current_user.username
     ).first()
 
     if group is None:
@@ -115,45 +140,40 @@ def view():
     new_form=AddMemberForm()
 
     new_form.members.choices=[
-        ('',)*2
+        ('',) * 2
     ]
     new_form.members.choices.extend(
-        (follower.followeeUsername,)*2
+        (follower.followeeUsername,) * 2
         for follower in db.query('Follow').find(
             followerUsername=current_user.username
         ).all()
     )
-    new_form.members.default=('---',)*2
+    new_form.members.default=('---',) * 2
 
     if request.method == 'POST':
         try:
             {
-                'update': lambda: handle_update_member(update_form),
-                'delete': lambda: handle_delete_member(update_form),
-                'new'   : lambda: handle_new_member(new_form),
+                'delete': lambda: handle_delete_member(update_form, group),
+                'add'   : lambda: handle_new_member(new_form, group),
                 None    : lambda: None
             }[request.form.get('action', default=None)]()
+        except KeyError as e:
+            print('KeyError', e)
         except pymysql.err.IntegrityError:
-            flash('Error')
+            db.session.rollback()
 
     update_forms=[
         UpdateMemberForm.populate(
-            current_user.username,
-            group_name
-        )
-    ]
-    update_forms.extend(
-        UpdateMemberForm.populate(
-            b.username,
-            group_name
+            b.username
         )
         for b in db.query('CloseFriendGroup').find(
             groupName=group_name
         ).first().belongs
-    )
+    ]
     return render_template(
         'groups/view.html',
         update_forms=update_forms,
         new_form=new_form,
-        group_name=group_name
+        group_name=group.groupName,
+        group_owner=group.groupOwner
     )

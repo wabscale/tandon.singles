@@ -4,8 +4,8 @@
     {{ follow_form.id }}
     {{ follow_form.csrf_token }}
 
-    <div class="card-body text-center">
-      <div class="float-left">
+    <div class="card-body text-center h-100">
+      <div class="float-left align-self-center">
         <h3 class="pl-3">
           <a href="{{ url_for('users.view', username=person.username) }}">
             @{{ person.username }}
@@ -14,8 +14,12 @@
       </div>
       {% if current_user.username == person.username %}
       {% elif current_user.awaiting_accept(person) %}
-        <div class="alert alert-success">
-          Follow request sent
+        <div class="row float-right">
+          <div class="col-12">
+            <div class="alert alert-success align-self-center">
+              Follow request sent
+            </div>
+          </div>
         </div>
       {% elif not current_user.follows(person) %}
         <button type="button" class="btn btn-outline-success follow-user">
@@ -24,7 +28,7 @@
       {% else %}
         {{ follow_form.id }}
         <button type="button" class="btn btn-outline-danger follow-user">
-          Unfollow{{ person.username }}
+          Unfollow {{ person.username }}
         </button>
       {% endif %}
     </div>

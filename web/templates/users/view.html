@@ -3,7 +3,7 @@
 {% from "users/macros.html" import render_user %}
 
 {% block content %}
-  <div class="container-fluid">
+  <div class="col-md-4 offset-md-4">
     {{ render_user(person, current_user) }}
 
     {% set visible = current_user.follows(person) or not person.isPrivate %}

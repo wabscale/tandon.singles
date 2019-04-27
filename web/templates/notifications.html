@@ -1,7 +1,7 @@
 
 
 {% macro render_notification(obj) %}
-  <div class="card notification">
+  <div class="card notification mt-3">
     <div class="card-body">
       {% set form = obj.to_form() %}
 
@@ -13,7 +13,7 @@
           Accept follow from
           <a href="{{ url_for('users.view', username=form.id.data) }}">{{ form.id.data }}</a>
         {% elif form.type.data == "tag" %}
-          {% set username = obj.photo[0].photoOwner %}
+          {% set username = obj.photo.photoOwner %}
           Accept
           <a href="{{ url_for('photos.view', photoID=form.id.data) }}">
             tag
@@ -37,7 +37,7 @@
 
 {% macro render_notifications() %}
   <div class="col-md-2 offset-md-1">
-    <div class="bg-dark rounded pl-1 pr-1">
+    <div class="rounded pl-1 pr-1">
       <ul class="nav flex-column">
         {% set objs = current_user.notifications %}
         {% for n in objs %}

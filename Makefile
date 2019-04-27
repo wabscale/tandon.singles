@@ -64,6 +64,12 @@ db:
 	docker-compose rm -f
 	docker-compose up -d --force-recreate db
 
+backup:
+	mkdir -p .data
+	docker-compose exec db mysqldump -h 127.0.0.1 -u root --password=password TS > .data/dump.sql
+
+restore:
+	docker-compose exec -T db mysql -h 127.0.0.1 -u root --password=password TS < .data/dump.sql
 
 ##########################################################
 #      _      _                       _          __  __  #

@@ -21,13 +21,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     {{ bootstrap.load_css() }}
     <link rel="stylesheet" href="/static/css/style.css">
+    <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.8.1/css/all.css"
+          integrity="sha384-50oBUHEmvpQ+1lW4y57PTFmhCaXp0ML5d60M1M7uH2+nqUivzIebhndOJK28anvf" crossorigin="anonymous">
     {% block stylesheets %}{% endblock %}
   </head>
 {% endblock %}
 
 <body>
 <nav class="navbar navbar-expand-sm navbar-inverse" id="top-navbar">
-  <div class="container-fluid">
+  <div class="container-fluid h-100">
     {% block navbarleft %}
       <ul class="nav navbar-nav navbar-expand-sm">
         <li class="nav-item">
@@ -52,13 +54,19 @@
           </li>
           <li id="logout-nav">
             <button type="button" class="btn btn-outline-warning m-2">
-              <a href="{{ url_for('auth.logout') }}" class="nav-link">Logout</a>
+              <div class="d-flex flex-row">
+                <a href="{{ url_for('auth.logout') }}" class="nav-link align-self-center">Logout</a>
+                <i class="fas fa-sign-out-alt align-self-center p-1"></i>
+              </div>
             </button>
           </li>
         {% else %}
           <li class="nav-item">
             <button type="button" class="btn btn-outline-warning m-2">
-              <a href="{{ url_for('auth.login') }}" class="nav-link">Login</a>
+              <div class="d-flex flex-row">
+                <a href="{{ url_for('auth.login') }}" class="nav-link align-self-center">Login</a>
+                <i class="fas fa-sign-in-alt align-self-center p-1"></i>
+              </div>
             </button>
           </li>
         {% endif %}

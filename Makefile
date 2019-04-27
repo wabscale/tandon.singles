@@ -104,3 +104,6 @@ clean:
 	if [ -n "`find . -name __pycache__`" ]; then \
 		rm -rf `find . -name __pycache__`; \
 	fi
+	if [ -f .data ]; then \
+		rm -rf .data; \
+	fi

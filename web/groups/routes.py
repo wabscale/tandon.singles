@@ -103,12 +103,19 @@ def view():
     group_name = request.args.get('group_name', default=None)
     if group_name is None:
         return redirect('home.index')
+    group=db.query('CloseFriendGroup').find(
+        groupName=group_name,
+        group_owner=current_user.username
+    ).first()
+
+    if group is None:
+        return redirect('home.index')
 
     update_form=UpdateMemberForm()
     new_form=AddMemberForm()
 
     new_form.members.choices=[
-        (current_user.username,)*2
+        ('',)*2
     ]
     new_form.members.choices.extend(
         (follower.followeeUsername,)*2

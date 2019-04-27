@@ -15,6 +15,13 @@ from .app import app, db
 
 
 class Tag(bigsql.DynamicModel):
+    @property
+    def photo(self):
+        p = Photo.query.find(
+            photoID=self.photoID
+        ).first()
+        return p
+
     def to_form(self):
         form=notifications.TagForm()
         form.id.data=self.username
@@ -82,12 +89,22 @@ class Photo(bigsql.DynamicModel):
 
         form.image.data.save(filepath)
 
+        caption=form.caption.data.split()
+
+        tags, caption = Photo.parse_caption(caption)
         photo=db.query('Photo').new(
             allFollowers=form.public.data,
             photoOwner=current_user.username,
             filePath=filepath,
-            caption=form.caption.data,
+            caption=caption,
         )
+
+        for tag in tags:
+            db.query('Tag').new(
+                username=tag,
+                photoID=photo.photoID,
+                acceptedTag=False
+            )
 
         if form.group.data:
             group=db.query('CloseFriendGroup').find(
@@ -111,6 +128,25 @@ class Photo(bigsql.DynamicModel):
         except bigsql.big_ERROR:
             db.session.rollback()
             return False
+
+    @staticmethod
+    def parse_caption(caption):
+        tags=[]
+        rem=set()
+        for index, word in enumerate(caption):
+            if word.startswith('@'):
+                rem.add(index)
+                username=word[1:]
+                if Person.query.find(
+                    username=username
+                ).first() is not None:
+                    tags.append(username)
+        caption=''.join(
+            word
+            for index, word in enumerate(caption)
+            if index not in rem
+        )
+        return tags, caption
 
     @staticmethod
     def owned_by(username):

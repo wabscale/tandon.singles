@@ -9,7 +9,7 @@ DOCKER_IMAGE_NAME=flasq
 DOCKER_OPTIONS=--rm -it -p 5000:5000
 DOCKER_DEPLOY_OPTIONS=
 
-.PHONY: all deploy buildall build buildbase rund killd setup cun cleand
+.PHONY: all deploy buildall build buildbase rund killd setup cun cleand db
 
 all: build rund
 buildall: buildbase build

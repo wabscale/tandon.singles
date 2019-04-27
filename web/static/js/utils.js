@@ -87,5 +87,13 @@ $(document).ready(function () {
         form.append($('<input type="hidden" name="action" value="reject">'));
         form.appendTo('body').submit();
     });
+
+    $('.search-button').click(function() {
+        let form = createForm(this, 'div');
+        let outter = $(this).closest('.card');
+        form.append(outter.find('input[name="content"]'));
+        form.append($('<input type="hidden" name="action" value="search">'));
+        form.appendTo('body').submit();
+    })
 });
 

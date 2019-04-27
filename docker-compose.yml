@@ -18,7 +18,7 @@ services:
       - "traefik.frontend.auth.basic.users=admin:$$2y$$05$$1/4YQ.nZ3eFWSMrOS4UOVOUMKVIbxHS8t4i7a5CgjqZ/3ytGnVlea"
       - "traefik.frontend.rule=Host:traefik.tandon.singles"
     networks:
-      - traefik-proxy
+      - default
       - internal
 
 
@@ -39,24 +39,23 @@ services:
       - "WORKERS=4"
       - "SITENAME=tandon.singles"
     networks:
-      - traefik-proxy
+      - default
       - internal
 
 
   db:
     build: db
-    expose:
-      - "3306"
+    ports:
+      - "127.0.0.1:3306:3306"
     environment:
       - "MYSQL_ROOT_PASSWORD=password"
     labels:
       - "traefik.enable=false"
     networks:
+      - default
       - internal
 
 networks:
   internal:
     internal: true
-  traefik-proxy:
-    external:
-      name: traefik-proxy
+  default:

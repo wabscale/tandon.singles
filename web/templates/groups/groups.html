@@ -19,11 +19,11 @@
             {{ render_field(update_form.group_name, form_type='inline', readonly=True) }}
           </td>
           <td>
-            <button type="button" class="btn btn-outline-success">
-              <a href="{{ url_for('groups.view', group_name=update_form.group_name.data) }}">
+            <a href="{{ url_for('groups.view', group_name=update_form.group_name.data) }}">
+              <button type="button" class="btn btn-outline-success">
                 View
-              </a>
-            </button>
+              </button>
+            </a>
           </td>
           <td>
             <button type="button" class="btn btn-outline-success group-edit">Edit</button>

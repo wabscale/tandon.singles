@@ -53,21 +53,25 @@
             </button>
           </li>
           <li id="logout-nav">
-            <button type="button" class="btn btn-outline-warning m-2">
-              <div class="d-flex flex-row">
-                <a href="{{ url_for('auth.logout') }}" class="nav-link align-self-center">Logout</a>
-                <i class="fas fa-sign-out-alt align-self-center p-1"></i>
-              </div>
-            </button>
+            <a href="{{ url_for('auth.logout') }}" class="nav-link align-self-center">
+              <button type="button" class="btn btn-outline-warning m-2">
+                <div class="d-flex flex-row">
+                  Logout
+                  <i class="fas fa-sign-out-alt align-self-center p-1"></i>
+                </div>
+              </button>
+            </a>
           </li>
         {% else %}
           <li class="nav-item">
-            <button type="button" class="btn btn-outline-warning m-2">
-              <div class="d-flex flex-row">
-                <a href="{{ url_for('auth.login') }}" class="nav-link align-self-center">Login</a>
-                <i class="fas fa-sign-in-alt align-self-center p-1"></i>
-              </div>
-            </button>
+            <a href="{{ url_for('auth.login') }}" class="nav-link align-self-center">
+              <button type="button" class="btn btn-outline-warning m-2">
+                <div class="d-flex flex-row">
+                  Login
+                  <i class="fas fa-sign-in-alt align-self-center p-1"></i>
+                </div>
+              </button>
+            </a>
           </li>
         {% endif %}
       </ul>

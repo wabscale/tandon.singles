@@ -7,7 +7,9 @@
     <div class="card-body text-center">
       <div class="float-left">
         <h3 class="pl-3">
-          {{ person.username }}
+          <a href="{{ url_for('users.view', username=person.username) }}">
+            @{{ person.username }}
+          </a>
         </h3>
       </div>
       {% if current_user.username == person.username %}

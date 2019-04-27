@@ -4,9 +4,7 @@ ENV_NAME=venv
 PYTHON_VERSION=`which python3`
 
 # Docker
-DOCKER=docker
 DOCKER_IMAGE_NAME=flasq
-DOCKER_COMPOSE=docker-compose
 
 DOCKER_OPTIONS=--rm -it -p 5000:5000
 DOCKER_DEPLOY_OPTIONS=
@@ -27,40 +25,44 @@ buildall: buildbase build
 
 deploy:
 	if [ -n "`docker image list -q | nice grep jmc1283/flasq-base`" ]; then \
-		${DOCKER} pull jmc1283/flasq-base; \
+		docker pull jmc1283/flasq-base; \
 	fi
 	if ! docker network ls | grep "traefik-proxy"; then \
 		docker network create traefik-proxy; \
 	fi
 	git submodule update
-	${DOCKER_COMPOSE} kill
-	${DOCKER_COMPOSE} rm -f
-	${DOCKER_COMPOSE} up --build -d --force-recreate ${DOCKER_DEPLOY_OPTIONS}
+	docker-compose kill
+	docker-compose rm -f
+	docker-compose up --build -d --force-recreate ${DOCKER_DEPLOY_OPTIONS}
 
 build:
 	if [ -n "`docker image list -q | nice grep jmc1283/flasq-base`" ]; then \
-		${DOCKER} pull jmc1283/flasq-base; \
+		docker pull jmc1283/flasq-base; \
 	fi
-	${DOCKER} build -t ${DOCKER_IMAGE_NAME} .
+	docker build -t ${DOCKER_IMAGE_NAME} .
 
 buildbase:
-	${DOCKER} build -t jmc1283/flasq-base base
+	docker build -t jmc1283/flasq-base base
 
 rund: killd
-	${DOCKER} run ${DOCKER_OPTIONS} --name ${DOCKER_IMAGE_NAME} ${DOCKER_IMAGE_NAME}
+	docker run ${DOCKER_OPTIONS} --name ${DOCKER_IMAGE_NAME} ${DOCKER_IMAGE_NAME}
 
 cleand: killd
-	${DOCKER} system prune -f
-	if [ -n "`${DOCKER} image list -q | grep ${DOCKER_IMAGE_NAME}`" ]; then \
-		${DOCKER} rmi ${DOCKER_IMAGE_NAME}; \
-		${DOCKER} rmi jmc1283/flasq-base; \
+	docker system prune -f
+	if [ -n "`docker image list -q | grep ${DOCKER_IMAGE_NAME}`" ]; then \
+		docker rmi ${DOCKER_IMAGE_NAME}; \
+		docker rmi jmc1283/flasq-base; \
 	fi
 
 killd:
-	if [ -z "$(${DOCKER} ps -q) | grep ${DOCKER_IMAGE_NAME}" ]; then \
-		${DOCKER} kill ${DOCKER_IMAGE_NAME}; \
+	if [ -z "$(docker ps -q) | grep ${DOCKER_IMAGE_NAME}" ]; then \
+		docker kill ${DOCKER_IMAGE_NAME}; \
 	fi
 
+db:
+	docker-compose kill
+	docker-compose rm -f
+	docker-compose up -d --force-recreate db
 
 
 ##########################################################

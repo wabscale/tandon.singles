@@ -71,11 +71,14 @@ def enable_notifications(func):
         tf=TagForm()
 
         if request.method == 'POST':
-            {
-                'follow': lambda: handle_follow(ff),
-                'tag'   : lambda: handle_tag(tf),
-                None    : lambda: None
-            }[request.form.get('type', default=None)]()
+            try:
+                {
+                    'follow': lambda: handle_follow(ff),
+                    'tag'   : lambda: handle_tag(tf),
+                    None    : lambda: None
+                }[request.form.get('type', default=None)]()
+            except KeyError:
+                pass
         return func(*args, **kwargs)
 
     return handle_notifications

@@ -74,6 +74,12 @@ $(document).ready(function () {
         form.appendTo('body').submit();
     });
 
+    $('.unfollow-user').click(function () {
+        let form = createForm(this, '.card');
+        form.append($('<input type="hidden" name="action" value="unfollow"/>'));
+        form.appendTo('body').submit();
+    });
+
     $('.follow-user').click(function () {
         let form = createForm(this, '.card');
         form.append($('<input type="hidden" name="action" value="follow"/>'));

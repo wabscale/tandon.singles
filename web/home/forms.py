@@ -1,10 +1,11 @@
+from flask_login import current_user
 from flask_wtf import FlaskForm
-from wtforms.fields import StringField, SubmitField, FileField, BooleanField, SelectField,HiddenField
-from wtforms.validators import DataRequired, InputRequired
+from wtforms.fields import StringField, SubmitField, FileField, BooleanField, SelectField, HiddenField
+from wtforms.validators import DataRequired, InputRequired, Optional
 from wtforms.widgets import TextArea
 
 from ..app import db
-from flask_login import current_user
+
 
 class PostForm(FlaskForm):
     action=HiddenField(
@@ -12,25 +13,26 @@ class PostForm(FlaskForm):
         default='post',
         validators=[DataRequired()]
     )
-    image = FileField(
+    image=FileField(
         'Image',
         validators=[DataRequired()]
     )
-    caption = StringField(
+    caption=StringField(
         'Caption',
         widget=TextArea(),
         validators=[InputRequired()]
     )
-    group = SelectField(
+    group=SelectField(
         'Friend Group',
-        validators=[]
+        validators=[Optional()]
     )
-    public = BooleanField(
+    public=BooleanField(
         'Public post',
-        default=True
+        default=True,
+        validators=[DataRequired()]
     )
 
-    post = SubmitField('Post', )
+    post=SubmitField('Post')
 
 
 class DeleteForm(FlaskForm):
@@ -72,6 +74,7 @@ class CommentForm(FlaskForm):
         form=CommentForm()
         form.id.data=photo.photoID
         return form
+
 
 class LikeForm(FlaskForm):
     id=HiddenField(

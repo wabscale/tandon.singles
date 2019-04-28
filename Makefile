@@ -97,12 +97,10 @@ setup:
 	./${ENV_NAME}/bin/pip install -r requirements.txt
 	./${ENV_NAME}/bin/pip install -r bigsql/requirements.txt
 
+run: debug
 debug:
 	if [ ! -d ${ENV_NAME} ]; then \
 		make setup; \
-	fi
-	if [ ! -e web/.data ]; then \
-		mkdir -p web/.data/uploads; \
 	fi
 	./${ENV_NAME}/bin/python ${MAIN_NAME}
 

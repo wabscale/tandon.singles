@@ -109,8 +109,8 @@ def handle_photos(func):
                     'comment': lambda: handle_comment(comment_form),
                     'like'   : lambda: handle_like(like_form)
                 }[request.form.get('action', default=None)]()
-            except KeyError as e:
-                print('KeyError', e)
+            except KeyError:
+                pass
             except pymysql.err.IntegrityError:
                 db.session.rollback()
         return func(*args, **kwargs)
@@ -125,15 +125,6 @@ def handle_photos(func):
 def index():
     post_form=PostForm()
 
-    try:
-        {
-            'post': lambda: handle_post(post_form),
-        }[request.form.get('action', default=None)]()
-    except KeyError as e:
-        print('KeyError', e)
-    except pymysql.err.IntegrityError:
-        db.session.rollback()
-
     group_choices=set()
     group_choices.add(('', '---'))
     for group in db.query('CloseFriendGroup').find(
@@ -143,6 +134,16 @@ def index():
     for b in current_user.belongs:
         group_choices.add((b.groupName,) * 2)
     post_form.group.choices=list(group_choices)
+
+    if request.method=='POST':
+        try:
+            {
+                'post': lambda: handle_post(post_form),
+            }[request.form.get('action', default=None)]()
+        except KeyError:
+            pass
+        except pymysql.err.IntegrityError:
+            db.session.rollback()
 
     return render_template(
         'home/index.html',

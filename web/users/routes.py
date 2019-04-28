@@ -1,7 +1,7 @@
 from functools import wraps
 
 import pymysql.cursors
-from flask import render_template, Blueprint, redirect, request
+from flask import render_template, Blueprint, redirect, request, flash
 from flask_login import current_user, login_required
 
 from bigsql import bigsql
@@ -41,6 +41,23 @@ def handle_follow(form):
 
 
 @validate
+def handle_unfollow(form):
+    f=db.query('Follow').find(
+        followerUsername=current_user.username,
+        followeeUsername=form.id.data,
+        acceptedfollow=True
+    ).first()
+    if f is not None:
+        db.session.delete(f)
+        try:
+            db.session.commit()
+        except bigsql.big_ERROR:
+            db.session.rollback()
+    else:
+        flash('unable to unfollow')
+
+
+@validate
 def search_users(form):
     return db.query('Person').append_raw(
         'WHERE Person.username LIKE %s',
@@ -48,28 +65,38 @@ def search_users(form):
     ).all()
 
 
+def handle_users(func):
+    @wraps(func)
+    def handler(*args, **kwargs):
+        follow_form=FollowForm()
+        if request.method == 'POST':
+            try:
+                {
+                    'follow'  : lambda: handle_follow(follow_form),
+                    'unfollow': lambda: handle_unfollow(follow_form),
+                    None      : lambda: None
+                }[request.form.get('action', default=None)]()
+            except KeyError:
+                pass
+            except pymysql.err.IntegrityError:
+                db.session.rollback()
+        return func(*args, **kwargs)
+
+    return handler
+
+
 @users.route('/', methods=['GET', 'POST'])
 @login_required
 @enable_notifications
 @home.handle_photos
+@handle_users
 def index():
-    follow_form=FollowForm()
     search_form=SearchForm()
 
     persons=None
-    if request.method == 'POST':
-        try:
-            {
-                'follow': lambda: handle_follow(follow_form),
-                None    : lambda: None
-            }[request.form.get('action', default=None)]()
-        except KeyError as e:
-            print('KeyError', e)
-        except pymysql.err.IntegrityError:
-            db.session.rollback()
 
-        if request.form.get('action', default=None) == 'search':
-            persons=search_users(search_form)
+    if request.form.get('action', default=None) == 'search':
+        persons=search_users(search_form)
 
     return render_template(
         'users/home.html',
@@ -82,20 +109,12 @@ def index():
 @users.route('/<username>', methods=['GET', 'POST'])
 @login_required
 @enable_notifications
+@home.handle_photos
+@handle_users
 def view(username):
-    comment_form=home.forms.CommentForm()
-    follow_form=FollowForm()
-
     person=db.query('Person').find(
         username=username
     ).first()
-
-    if request.method == 'POST':
-        {
-            'follow' : lambda: handle_follow(follow_form),
-            'comment': lambda: home.routes.handle_comment(comment_form),
-            None     : lambda: None
-        }[request.form.get('action', default=None)]()
 
     if person is None:
         return redirect('home.index')

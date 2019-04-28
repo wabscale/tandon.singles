@@ -157,8 +157,8 @@ def view():
                 'add'   : lambda: handle_new_member(new_form, group),
                 None    : lambda: None
             }[request.form.get('action', default=None)]()
-        except KeyError as e:
-            print('KeyError', e)
+        except KeyError:
+            pass
         except pymysql.err.IntegrityError:
             db.session.rollback()
 

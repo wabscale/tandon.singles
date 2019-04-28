@@ -148,7 +148,7 @@ class Photo(bigsql.DynamicModel):
                 ).first() is not None:
                     rem.add(index)
                     tags.append(username)
-        return tags, caption
+        return tags, ' '.join(caption)
 
     @staticmethod
     def owned_by(username):

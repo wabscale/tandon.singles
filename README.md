@@ -1,20 +1,21 @@
 [![pipeline status](https://gitlab.com/b1g_J/tandon.singles/badges/master/pipeline.svg)](https://gitlab.com/b1g_J/tandon.singles/commits/master)
 
 # tandon.singles
+A [flasq](https://gitlab.com/b1g_J/flasq) app.
 
-A proud [flasq](https://gitlab.com/b1g_J/flasq) app.
+This project deserves a bit of an explantion. Writing raw sql just is not a thing in the real world anymore. 
+Sql is generated for us with ORM tools like sqlalchemy. I made the incorrect assumption that we would use modern
+tools in NYU's introduction to databases class, rather we would be expected to write raw querys. Instead of this,
+I opted to implement my own ORM. The result of this decision is that I wrote an ORM that generates, and executes 
+sql for me. I call my ORM [bigsql](https://gitlab.com/b1g_J/bigsql).
 
-### ORM
-This project didn't seem particularly interesting, so I implemented my own custom ORM to make it more spicy. 
-It features dynamic model creation, with on the fly relationship detection and resolution. 
-It uses an SQL query generator engine that I also implemented for this project.
-
-# big_SQL
+## big_SQL
 big_SQL is an ORM features dynamic model generation, with on the fly relationship detection and resolution. 
-It uses a high level custom sql generator in its backend.
+It uses an SQL query generator engine in its backend that I also implemented for this project.
 
-### Static generation
+## Static generation
 To use the static models with bigSQL, all you need to do define your models same as other ORMs:
+
 ```python
 from bigsql import *
 
@@ -34,10 +35,7 @@ db.create_all()
 
 t = Test(a_string='a string')
 
-db.session.add(t)
-
 try:
-    db.session.add(t)
     db.session.commit()
 except big_ERROR as e:
     print('onooooooz', e)
@@ -92,16 +90,16 @@ except big_ERROR as e:
 
 
 
-### Dynamic generation
+## Dynamic generation
 
-#### Models
+#### Dynamic Models
 The really cool thing this ORM does is dynamic model generation. 
 If you already have a database with tables defined, you can 
 just query existing tables, and bigsql will generate models for you.
 
-#### Relationships
+#### Dynamic Relationships
 If you have a defined foreign key relationship with another table 
-already defined, you don't need to tell bigsql about them. For an object 
+already defined, you do not need to tell bigsql about them. For an object 
 with foreign models, you can just access it as a attribute, and it will 
 hand you an iterable object with all the associated object for the 
 current model (either dynamically or statically generated).
@@ -141,9 +139,6 @@ db = big_SQL(
 admin = db.query('Person').new(username='admin')
 # new_photo will be a dynamically generated model object
 new_photo = db.query('Photo').new(photoOwner='admin')
-
-db.session.add(admin)
-db.session.add(new_photo)
 
 try:
     db.session.commit()

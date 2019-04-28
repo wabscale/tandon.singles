@@ -114,7 +114,7 @@ pyclean:
 		rm -rf `find . -name __pycache__`; \
 	fi
 
-clean:
+clean: pyclean
 	if [ -d .data ]; then \
 		rm -rf .data; \
 	fi

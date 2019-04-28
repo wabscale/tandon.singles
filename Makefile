@@ -115,6 +115,6 @@ pyclean:
 	fi
 
 clean:
-	if [ -f .data ]; then \
+	if [ -d .data ]; then \
 		rm -rf .data; \
 	fi

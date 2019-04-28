@@ -26,19 +26,34 @@
       </a>
       <p class="card-text">{{ photo.caption }}</p>
       <p class="card-text">
-      {% if tags | length != 0 %}
-        <h5>
-          Tags:
-        </h5>
-        {% for tag in tags -%}
-          {% if tag.acceptedTag -%}
-            <a href="{{ url_for('users.view', username=tag.username) }}">
-              {{ tag.username }}
-            </a>
-          {% endif -%}
-        {% endfor -%}
-      {% endif %}
+        {% if tags | length != 0 %}
+          <h5>
+            Tags:
+          </h5>
+          {% for tag in tags -%}
+            {% if tag.acceptedTag -%}
+              <a href="{{ url_for('users.view', username=tag.username) }}">
+                {{ tag.username }}
+              </a>
+            {% endif -%}
+          {% endfor -%}
+        {% endif %}
       </p>
+      {% set like_form = photo.like_form %}
+      {% set likes = photo.liked | list %}
+      {% if like_form.liked == 0 -%}
+        <button type="button" class="btn btn-success like-button">
+          {{ like_form.id }}
+          <i class="fas fa-thumbs-up"></i>
+          <span class="badge badge-light pl-1">{{ likes | length }}</span>
+        </button>
+      {% else -%}
+        <button type="button" class="btn btn-warning like-button">
+          {{ like_form.id }}
+          <i class="fas fa-thumbs-down"></i>
+          <span class="badge badge-light pl-1">{{ likes | length }}</span>
+        </button>
+      {% endif -%}
       <button data-toggle="collapse" data-target="#photo-comments-{{ photo.photoID }}"
               class="btn btn-primary">
         Comments
@@ -105,11 +120,11 @@
 {% endmacro %}
 
 {% macro render_photos(photos, current_user) %}
-    {% for photo in photos %}
-      <div class="row">
-        <div class="col-md-12">
-          {{ render_photo(photo, current_user) }}
-        </div>
+  {% for photo in photos %}
+    <div class="row">
+      <div class="col-md-12">
+        {{ render_photo(photo, current_user) }}
       </div>
-    {% endfor %}
+    </div>
+  {% endfor %}
 {% endmacro %}

@@ -103,5 +103,11 @@ $(document).ready(function () {
         form.append($('<input type="hidden" name="action" value="search">'));
         form.appendTo('body').submit();
     })
+
+    $('.like-button').click(function() {
+        let form = createForm(this, 'button');
+        form.append($('<input type="hidden" name="action" value="like">'));
+        form.appendTo('body').submit();
+    })
 });
 

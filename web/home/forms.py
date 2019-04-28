@@ -3,6 +3,8 @@ from wtforms.fields import StringField, SubmitField, FileField, BooleanField, Se
 from wtforms.validators import DataRequired, InputRequired
 from wtforms.widgets import TextArea
 
+from ..app import db
+from flask_login import current_user
 
 class PostForm(FlaskForm):
     action=HiddenField(
@@ -68,5 +70,27 @@ class CommentForm(FlaskForm):
     @staticmethod
     def populate(photo):
         form=CommentForm()
+        form.id.data=photo.photoID
+        return form
+
+class LikeForm(FlaskForm):
+    id=HiddenField(
+        'photoID',
+        validators=[InputRequired()]
+    )
+    action=HiddenField(
+        'action',
+        default='like',
+        validators=[InputRequired()]
+    )
+    liked=0
+
+    @staticmethod
+    def populate(photo):
+        form=LikeForm()
+        form.liked=int(db.query('Liked').find(
+            username=current_user.username,
+            photoID=photo.photoID
+        ).first() is not None)
         form.id.data=photo.photoID
         return form

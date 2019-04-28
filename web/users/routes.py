@@ -1,5 +1,6 @@
 from functools import wraps
 
+import pymysql.cursors
 from flask import render_template, Blueprint, redirect, request
 from flask_login import current_user, login_required
 
@@ -50,6 +51,7 @@ def search_users(form):
 @users.route('/', methods=['GET', 'POST'])
 @login_required
 @enable_notifications
+@home.handle_photos
 def index():
     follow_form=FollowForm()
     search_form=SearchForm()

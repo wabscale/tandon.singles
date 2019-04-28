@@ -5,7 +5,7 @@ from flask import flash, render_template, Blueprint, send_from_directory, reques
 from flask_login import current_user, login_required
 
 import bigsql
-from .forms import PostForm, DeleteForm, CommentForm
+from .forms import PostForm, DeleteForm, CommentForm, LikeForm
 from .. import models
 from ..app import app, db
 from ..notifications import enable_notifications
@@ -75,36 +75,75 @@ def handle_comment(form):
         db.session.rollback()
 
 
+@validate
+def handle_like(form):
+    like=db.query('Liked').find(
+        username=current_user.username,
+        photoID=form.id.data
+    ).first()
+
+    if like is None:  # like
+        db.query('Liked').new(
+            username=current_user.username,
+            photoID=form.id.data
+        )
+    else:  # unlike
+        db.session.delete(like)
+
+    try:
+        db.session.commit()
+    except bigsql.big_ERROR:
+        db.session.rollback()
+
+
+def handle_photos(func):
+    @wraps(func)
+    def handler(*args, **kwargs):
+        if request.method == 'POST':
+            delete_form=DeleteForm()
+            comment_form=CommentForm()
+            like_form=LikeForm()
+            try:
+                {
+                    'delete' : lambda: handle_delete(delete_form),
+                    'comment': lambda: handle_comment(comment_form),
+                    'like'   : lambda: handle_like(like_form)
+                }[request.form.get('action', default=None)]()
+            except KeyError as e:
+                print('KeyError', e)
+            except pymysql.err.IntegrityError:
+                db.session.rollback()
+        return func(*args, **kwargs)
+
+    return handler
+
+
 @home.route('/', methods=['GET', 'POST'])
 @login_required
 @enable_notifications
+@handle_photos
 def index():
     post_form=PostForm()
-    delete_form=DeleteForm()
-    comment_form=CommentForm()
+
+    try:
+        {
+            'post': lambda: handle_post(post_form),
+        }[request.form.get('action', default=None)]()
+    except KeyError as e:
+        print('KeyError', e)
+    except pymysql.err.IntegrityError:
+        db.session.rollback()
 
     group_choices=set()
     group_choices.add(('', '---'))
     for group in db.query('CloseFriendGroup').find(
             groupOwner=current_user.username
     ).all():
-        group_choices.add((group.groupName,)*2)
+        group_choices.add((group.groupName,) * 2)
     for b in current_user.belongs:
-        group_choices.add((b.groupName,)*2)
+        group_choices.add((b.groupName,) * 2)
     post_form.group.choices=list(group_choices)
 
-    if request.method == 'POST':
-        try:
-            {
-                'post'   : lambda: handle_post(post_form),
-                'delete' : lambda: handle_delete(delete_form),
-                'comment': lambda: handle_comment(comment_form),
-                None     : lambda: None
-            }[request.form.get('action', default=None)]()
-        except KeyError as e:
-            print('KeyError', e)
-        except pymysql.err.IntegrityError:
-            db.session.rollback()
     return render_template(
         'home/index.html',
         post_form=post_form,

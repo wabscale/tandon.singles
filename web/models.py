@@ -148,11 +148,6 @@ class Photo(bigsql.DynamicModel):
                 ).first() is not None:
                     rem.add(index)
                     tags.append(username)
-        caption=''.join(
-            word
-            for index, word in enumerate(caption)
-            if index not in rem
-        )
         return tags, caption
 
     @staticmethod
@@ -210,6 +205,10 @@ class Photo(bigsql.DynamicModel):
     @property
     def comment_form(self):
         return home.forms.CommentForm.populate(self)
+
+    @property
+    def like_form(self):
+        return home.forms.LikeForm.populate(self)
 
 
 class CloseFriendGroup(bigsql.DynamicModel):
